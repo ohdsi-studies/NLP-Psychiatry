@@ -23,7 +23,7 @@ if (!requireNamespace("getPass", quietly = TRUE)) {
   install.packages("getPass")
 }
 mypassword = getPass::getPass("Enter your database password")
-# mypassword = "vincentHatil#3692"
+
 
 # USER INPUTS
 #=======================
