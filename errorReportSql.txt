@@ -1,0 +1,32 @@
+DBMS:
+postgresql
+
+Error:
+org.postgresql.util.PSQLException: ERROR: syntax error at end of input
+  Position: 84
+
+SQL:
+DELETE FROM mdcr_mdd_bd_ohdsi.bipolarValidationCohort where cohort_definition_id = 
+
+R version:
+R version 4.4.2 (2024-10-31)
+
+Platform:
+x86_64-pc-linux-gnu
+
+Attached base packages:
+- stats
+- graphics
+- grDevices
+- utils
+- datasets
+- methods
+- base
+
+Other attached packages:
+- BipolarMisclassificationValidation (0.0.2)
+- getPass (0.2-4)
+- survival (3.7-0)
+- DatabaseConnector (6.3.2)
+- devtools (2.4.5)
+- usethis (3.0.0)

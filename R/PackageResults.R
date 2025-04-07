@@ -46,15 +46,26 @@ packageResults <- function(outputFolder,
     if(minCellCount==0){
       minCellCount <- NULL
     }
-    result <- PatientLevelPrediction::transportPlp(plpResult, save = F,
-                                                   n=minCellCount,
-                                                   includeEvaluationStatistics=T,
-                                                   includeThresholdSummary=T,
-                                                   includeDemographicSummary=T,
-                                                   includeCalibrationSummary =T,
-                                                   includePredictionDistribution=T,
-                                                   includeCovariateSummary=T)
+    # result <- PatientLevelPrediction::transportPlp(plpResult, save = F,
+    #                                                n=minCellCount,
+    #                                                includeEvaluationStatistics=T,
+    #                                                includeThresholdSummary=T,
+    #                                                includeDemographicSummary=T,
+    #                                                includeCalibrationSummary =T,
+    #                                                includePredictionDistribution=T,
+    #                                                includeCovariateSummary=T)
+    # cat("before shareable\n")
 
+    result <- PatientLevelPrediction::savePlpShareable(plpResult, saveDirectory = exportFolder,
+                                                   minCellCount=minCellCount)
+                                                  #  includeEvaluationStatistics=T,
+                                                  #  includeThresholdSummary=T,
+                                                  #  includeDemographicSummary=T,
+                                                  #  includeCalibrationSummary =T,
+                                                  #  includePredictionDistribution=T,
+                                                  #  includeCovariateSummary=T)
+
+    # cat("after\n")
     #==== remove low counts from extras:
     if(!is.null(minCellCount)){
       if(minCellCount>0){
@@ -70,7 +81,7 @@ packageResults <- function(outputFolder,
     removeId <- result$yauc$N < minCellCount
     result$yauc[removeId, 'auc'] <- -1
     result$yauc[removeId, 'N'] <- -1
-
+    # cat("before save\n")
     saveRDS(result, file.path(exportFolder, 'validationResults.rds'))
 
   }

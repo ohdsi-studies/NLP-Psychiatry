@@ -1,26 +1,34 @@
 # INSTALLING (uncomment to install)
+.libPaths("/data/fmoomtaheen/R_libs_user")
 
-#install.packages('devtools')
-#devtools::install_github("OHDSI/OhdsiSharing")
-#devtools::install_github("OHDSI/FeatureExtraction")
-#devtools::install_github("OHDSI/PatientLevelPrediction")
-#devtools::install_github("ohdsi-studies/BipolarMisclassificationValidation")
-#devtools::install_github("OHDSI/DatabaseConnector")
+# install.packages('devtools')
+# library(devtools)
 
-library(BipolarMisclassificationValidation)
+# devtools::install_github("OHDSI/OhdsiSharing")
+# devtools::install_github("OHDSI/FeatureExtraction", dependencies=TRUE, force=TRUE)
+# devtools::install_github("ohdsi-studies/BipolarMisclassificationValidation", force=TRUE)
+# devtools::install_github("OHDSI/DatabaseConnector", dependencies=TRUE,force=TRUE)
+# devtools::install_github("OHDSI/SqlRender", dependencies=TRUE,force=TRUE)
+# devtools::install_github("OHDSI/PatientLevelPrediction", dependencies=TRUE,force=TRUE)
+library(OhdsiSharing)
+library(FeatureExtraction)
+library(PatientLevelPrediction)
+library(DatabaseConnector)
+library(rJava)
+library(getPass)
+
+
 
 if (!requireNamespace("getPass", quietly = TRUE)) {
   install.packages("getPass")
 }
-library(getPass)
-
 mypassword = getPass::getPass("Enter your database password")
-
+# mypassword = "vincentHatil#3692"
 
 # USER INPUTS
 #=======================
 # minCellCount is a number (e.g., 0, 5 or 10) - this will
-# remove any cell with a count less than minCellCount when packing the results to share
+# remove any cell with a count less than minCellCount when packing the results to share # nolint
 # you will have a complete copy of the results locally, but the results ready to
 # share will have values less than minCellCount removed.
 minCellCount <- 0
@@ -28,7 +36,7 @@ minCellCount <- 0
 restrictToAdults <- FALSE
 
 # The folder where the study intermediate and result files will be written:
-outputFolder <- "/data/fmoomtaheen/bipolarValidationResults/ccae/"
+outputFolder <- "/data/fmoomtaheen/bipolarValidationResults/mdcr/"
 
 # Specify where the temporary files (used by the ff package) will be created:
 options(fftempdir = "/data/fmoomtaheen/tmp/")
@@ -48,17 +56,21 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = dbms,
                                                                 pathToDriver = "/data/fmoomtaheen/BipolarMisclassificationValidation/extras/")
 
 # Add the database containing the OMOP CDM data
-cdmDatabaseSchema <- 'ccae2003_2022'
+cdmDatabaseSchema <- 'mdcr2003_2022'
 # Add a sharebale name for the cdmDatabaseSchema database
-databaseName <- 'ccae2003_2022'
+databaseName <- 'mdcr2003_2022'
 # Add a database with read/write access as this is where the cohorts will be generated
-cohortDatabaseSchema <- 'ccae_mdd_bd_ohdsi'
+cohortDatabaseSchema <- 'mdcr_mdd_bd_ohdsi'
 
-oracleTempSchema <- NULL
+tempEmulationSchema <- NULL
 
 # table name where the cohorts will be generated
 cohortTable <- 'bipolarValidationCohort'
 #=======================
+
+
+devtools::load_all("/data/fmoomtaheen/BipolarMisclassificationValidation")
+
 
 BipolarMisclassificationValidation::execute(connectionDetails = connectionDetails,
                                             cdmDatabaseSchema = cdmDatabaseSchema,
@@ -66,7 +78,7 @@ BipolarMisclassificationValidation::execute(connectionDetails = connectionDetail
                                             cohortTable = cohortTable,
                                             outputFolder = outputFolder,
                                             databaseName = databaseName,
-                                            oracleTempSchema = oracleTempSchema,
+                                            tempEmulationSchema = tempEmulationSchema,
                                             viewModel = F,
                                             createCohorts = T,
                                             runValidation = T,
@@ -74,3 +86,6 @@ BipolarMisclassificationValidation::execute(connectionDetails = connectionDetail
                                             minCellCount = minCellCount,
                                             sampleSize = NULL,
                                             restrictToAdults = restrictToAdults)
+
+
+

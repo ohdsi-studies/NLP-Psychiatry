@@ -32,7 +32,7 @@
 #' @param cohortTable          The name of the table that will be created in the work database schema.
 #'                             This table will hold the exposure and outcome cohorts used in this
 #'                             study.
-#' @param oracleTempSchema     Should be used in Oracle to specify a schema where the user has write
+#' @param tempEmulationSchema     Should be used in Oracle to specify a schema where the user has write
 #'                             priviliges for storing temporary tables.
 #' @param outputFolder         Name of local folder to place results; make sure to use forward slashes
 #'                             (/)
@@ -43,7 +43,7 @@ createCohorts <- function(connectionDetails,
                           cdmDatabaseSchema,
                           cohortDatabaseSchema,
                           cohortTable = "cohort",
-                          oracleTempSchema,
+                          tempEmulationSchema,
                           outputFolder,
                           restrictToAdults) {
   if (!file.exists(outputFolder))
@@ -55,16 +55,16 @@ createCohorts <- function(connectionDetails,
                  cdmDatabaseSchema = cdmDatabaseSchema,
                  cohortDatabaseSchema = cohortDatabaseSchema,
                  cohortTable = cohortTable,
-                 oracleTempSchema = oracleTempSchema,
+                 tempEmulationSchema = tempEmulationSchema,
                  outputFolder = outputFolder,
                  restrictToAdults = restrictToAdults)
 
   # Check number of subjects per cohort:
-  ParallelLogger::logInfo("Counting cohorts")
+  # ParallelLogger::logInfo("Counting cohorts")
   sql <- SqlRender::loadRenderTranslateSql("GetCounts.sql",
                                            "BipolarMisclassificationValidation",
                                            dbms = connectionDetails$dbms,
-                                           oracleTempSchema = oracleTempSchema,
+                                           tempEmulationSchema = tempEmulationSchema,
                                            cdm_database_schema = cdmDatabaseSchema,
                                            work_database_schema = cohortDatabaseSchema,
                                            study_cohort_table = cohortTable)
@@ -80,10 +80,10 @@ addCohortNames <- function(data, IdColumnName = "cohortDefinitionId", nameColumn
   pathToCsv <- system.file("settings", "CohortsToCreate.csv", package = "BipolarMisclassificationValidation")
   cohortsToCreate <- utils::read.csv(pathToCsv)
 
-  idToName <- data.frame(cohortId = c(cohortsToCreate$cohortId),
+  idToName <- data.frame(targetId = c(cohortsToCreate$targetId),
                          cohortName = c(as.character(cohortsToCreate$name)))
-  idToName <- idToName[order(idToName$cohortId), ]
-  idToName <- idToName[!duplicated(idToName$cohortId), ]
+  idToName <- idToName[order(idToName$targetId), ]
+  idToName <- idToName[!duplicated(idToName$targetId), ]
   names(idToName)[1] <- IdColumnName
   names(idToName)[2] <- nameColumnName
   data <- merge(data, idToName, all.x = TRUE)
@@ -94,21 +94,31 @@ addCohortNames <- function(data, IdColumnName = "cohortDefinitionId", nameColumn
   }
   return(data)
 }
+# Print the package path and file to confirm
+# cat("1Looking for file in: ", system.file("sql/sql_server", package = "BipolarMisclassificationValidation"), "\n")
+
+# List contents of the folder R is actually using
+list.files(system.file("sql/sql_server", package = "BipolarMisclassificationValidation"))
 
 .createCohorts <- function(connection,
                            cdmDatabaseSchema,
                            vocabularyDatabaseSchema = cdmDatabaseSchema,
                            cohortDatabaseSchema,
                            cohortTable,
-                           oracleTempSchema,
+                           tempEmulationSchema,
                            outputFolder,
                            restrictToAdults) {
-
+  # Print the package path and file to confirm
+  # cat("2Looking for file in: ", system.file("sql/sql_server", package = "BipolarMisclassificationValidation"), "\n")
+  
+  # List contents of the folder R is actually using
+  list.files(system.file("sql/sql_server", package = "BipolarMisclassificationValidation"))
+  
   # Create study cohort table structure:
   sql <- SqlRender::loadRenderTranslateSql(sqlFilename = "CreateCohortTable.sql",
                                            packageName = "BipolarMisclassificationValidation",
                                            dbms = attr(connection, "dbms"),
-                                           oracleTempSchema = oracleTempSchema,
+                                           tempEmulationSchema = tempEmulationSchema,
                                            cohort_database_schema = cohortDatabaseSchema,
                                            cohort_table = cohortTable)
   DatabaseConnector::executeSql(connection, sql, progressBar = FALSE, reportOverallTime = FALSE)
@@ -131,13 +141,13 @@ addCohortNames <- function(data, IdColumnName = "cohortDefinitionId", nameColumn
     sql <- SqlRender::loadRenderTranslateSql(sqlFilename = paste0(sqlname, ".sql"),
                                              packageName = "BipolarMisclassificationValidation",
                                              dbms = attr(connection, "dbms"),
-                                             oracleTempSchema = oracleTempSchema,
+                                             tempEmulationSchema = tempEmulationSchema,
                                              cdm_database_schema = cdmDatabaseSchema,
                                              vocabulary_database_schema = vocabularyDatabaseSchema,
 
                                              target_database_schema = cohortDatabaseSchema,
                                              target_cohort_table = cohortTable,
-                                             target_cohort_id = cohortsToCreate$cohortId[i])
+                                             target_cohort_id = cohortsToCreate$targetId[i])
     DatabaseConnector::executeSql(connection, sql)
   }
 }
@@ -170,16 +180,34 @@ getTable1 <- function(connectionDetails,
 
   covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = T)
 
-  plpData <- PatientLevelPrediction::getPlpData(connectionDetails,
-                                                cdmDatabaseSchema = cdmDatabaseSchema,
-                                                cohortId = targetId, outcomeIds = outcomeId,
-                                                cohortDatabaseSchema = cohortDatabaseSchema,
-                                                outcomeDatabaseSchema = cohortDatabaseSchema,
-                                                cohortTable = cohortTable,
-                                                outcomeTable = cohortTable,
-                                                covariateSettings=covariateSettings)
+  
+  databaseDetails <- PatientLevelPrediction::createDatabaseDetails(
+    connectionDetails = connectionDetails,
+    cdmDatabaseSchema = cdmDatabaseSchema,
+    cohortDatabaseSchema = cohortDatabaseSchema,
+    cohortTable = cohortTable,
+    outcomeDatabaseSchema = cohortDatabaseSchema,
+    outcomeTable = cohortTable,
+    targetId = targetId,
+    outcomeIds = outcomeId
+  )
+  restrictPlpDataSettings <- PatientLevelPrediction::createRestrictPlpDataSettings()
+  
+  plpData <- PatientLevelPrediction::getPlpData(
+    databaseDetails = databaseDetails,
+    covariateSettings = covariateSettings,
+    restrictPlpDataSettings = restrictPlpDataSettings
+  )
+  #plpData <- PatientLevelPrediction::getPlpData(connectionDetails,
+   #                                             cdmDatabaseSchema = cdmDatabaseSchema,
+    #                                            cohortId = targetId, outcomeIds = outcomeId,
+     #                                           cohortDatabaseSchema = cohortDatabaseSchema,
+      #                                          outcomeDatabaseSchema = cohortDatabaseSchema,
+       #                                         cohortTable = cohortTable,
+        #                                        outcomeTable = cohortTable,
+         #                                       covariateSettings=covariateSettings)
 
-  population <- PatientLevelPrediction::createStudyPopulation(plpData = plpData,
+  population <- PaftientLevelPrediction::createStudyPopulation(plpData = plpData,
                                                               outcomeId = outcomeId,
                                                               binary = T,
                                                               includeAllOutcomes = T,
@@ -303,13 +331,13 @@ getBipolarData <- function(connectionDetails,
                            cdmDatabaseSchema,
                            cohortDatabaseSchema,
                            cohortTable,
-                           cohortId,
+                           targetId,
                            outcomeDatabaseSchema,
                            outcomeTable,
                            outcomeId,
-                           oracleTempSchema = NULL,
+                           tempEmulationSchema = NULL,
                            sampleSize = NULL){
-
+  # cat("inside\n")
   cohorts <- data.frame(names = c('mental health disorder','Suicidal thoughts or Self harm',
                                   'Pregnancy',
                                   'Anxiety drugs and Anxiety', 'Mild depression',
@@ -322,37 +350,79 @@ getBipolarData <- function(connectionDetails,
 
   cohortCov <- list()
   length(cohortCov) <- nrow(cohorts)+1
-  cohortCov[[1]] <- FeatureExtraction::createCovariateSettings(useDemographicsAgeGroup = T)
+  cohortCov[[1]] <- FeatureExtraction::createCovariateSettings(useDemographicsAgeGroup = TRUE)
 
+  # cat("feature extracted\n")
 
   for(i in 1:nrow(cohorts)){
-    cohortCov[[1+i]] <- createCohortCovariateSettings(covariateName = as.character(cohorts$names[i]),
-                                                      covariateId = cohorts$ids[i]*1000+456, count = F,
+    cohortCov[[1+i]] <- createCohortCovariateSettingsCustom(covariateName = as.character(cohorts$names[i]),
+                                                      covariateId = cohorts$ids[i]*1000+456,
                                                       cohortDatabaseSchema = cohortDatabaseSchema,
                                                       cohortTable = cohortTable,
-                                                      cohortId = cohorts$ids[i],
-                                                      startDay=-9999, endDay=cohorts$endDay[i])
+                                                      targetId = cohorts$ids[i],
+                                                      startDay=-9999, endDay=cohorts$endDays[i],
+                                                      count = FALSE,
+                                                      analysisId = 456
+                                                    )
   }
 
+  # for (i in 1:nrow(cohorts)) {
+  # cohortCov[[1 + i]] <- FeatureExtraction::createCovariateSettings(
+  #   # covariateName = as.character(cohorts$names[i]),
+  #   includedCovariateConceptIds = cohorts$ids[i], 
+  #   longTermStartDays = -9999,  
+  #   includedCovariateIds = cohorts$ids[i] * 1000 + 456,
+  #   endDay = cohorts$endDays[i],
+  #   # analsisId = 456,
+  #   # isBinary = TRUE
+  #   )
+  # }
 
-  plpData <- PatientLevelPrediction::getPlpData(connectionDetails = connectionDetails,
-                                                cdmDatabaseSchema = cdmDatabaseSchema,
-                                                cohortId = cohortId,
-                                                outcomeIds = outcomeId,
-                                                cohortDatabaseSchema = cohortDatabaseSchema,
-                                                cohortTable = cohortTable,
-                                                outcomeDatabaseSchema = outcomeDatabaseSchema,
-                                                outcomeTable = outcomeTable,
-                                                covariateSettings = cohortCov,
-                                                oracleTempSchema = oracleTempSchema,
-                                                sampleSize = sampleSize)
+  # cat("cohort cov created\n")
+  # str(cohortCov)
+  # print(cohortCov)
+
+  databaseDetails <- PatientLevelPrediction::createDatabaseDetails(
+    connectionDetails = connectionDetails,
+    cdmDatabaseSchema = cdmDatabaseSchema,
+    cohortDatabaseSchema = cohortDatabaseSchema,
+    cohortTable = cohortTable,
+    outcomeDatabaseSchema = outcomeDatabaseSchema,
+    outcomeTable = outcomeTable,
+    targetId = targetId,
+    outcomeIds = outcomeId
+  )
+  # cat("db details created\n")
+  restrictPlpDataSettings <- PatientLevelPrediction::createRestrictPlpDataSettings(sampleSize = sampleSize)
+  # cat("restrict\n")
+  plpData <- PatientLevelPrediction::getPlpData(
+    databaseDetails = databaseDetails,
+    covariateSettings = cohortCov,
+    restrictPlpDataSettings = restrictPlpDataSettings
+  )
+
+  # cat("get plp data done\n")
+  # plpData <- PatientLevelPrediction::getPlpData(connectionDetails = connectionDetails,
+  #                                              cdmDatabaseSchema = cdmDatabaseSchema,
+   #                                             cohortId = cohortId,
+    #                                            outcomeIds = outcomeId,
+     #                                           cohortDatabaseSchema = cohortDatabaseSchema,
+      #                                          cohortTable = cohortTable,
+       #                                         outcomeDatabaseSchema = outcomeDatabaseSchema,
+        #                                        outcomeTable = outcomeTable,
+         #                                       covariateSettings = cohortCov,
+          #                                      tempEmulationSchema = tempEmulationSchema,
+           #                                     sampleSize = sampleSize)
 
   return(plpData)
 
 
 }
 
-predictBipolar <- function(plpData, population){
+predictBipolar <- function(plpModel, data, cohort) {
+  # Map the arguments
+  plpData <- data
+  population <- cohort
   coefficients <- getModel()
 
   if('covariateData'%in%names(plpData)){
@@ -378,23 +448,24 @@ predictBipolar <- function(plpData, population){
   prediction <- merge(population, prediction, by ="rowId", all.x = TRUE)
   prediction$value[is.na(prediction$value)] <- 0
 
-  attr(prediction, "metaData") <- list(predictionType = 'binary')
+  attr(prediction, "metaData") <- list(predictionType = 'binary', modelType = 'binary', evaluationColumn = "value")
 
 return(prediction)
 }
 
 
 
-createCohortCovariateSettings <- function(covariateName, covariateId,
-                                          cohortDatabaseSchema, cohortTable, cohortId,
-                                          startDay=-30, endDay=0, count=T) {
+createCohortCovariateSettingsCustom <- function(covariateName, covariateId,
+                                          cohortDatabaseSchema, cohortTable, targetId,
+                                          startDay=-30, endDay=0, count=T, analysisId) {
   covariateSettings <- list(covariateName=covariateName, covariateId=covariateId,
                             cohortDatabaseSchema=cohortDatabaseSchema,
                             cohortTable=cohortTable,
-                            cohortId=cohortId,
+                            targetId=targetId,
                             startDay=startDay,
                             endDay=endDay,
-                            count=count)
+                            count=count,
+                            analysisId = analysisId)
 
   attr(covariateSettings, "fun") <- "getCohortCovariateData"
   class(covariateSettings) <- "covariateSettings"
@@ -408,13 +479,15 @@ createCohortCovariateSettings <- function(covariateName, covariateId,
 #' cohort during the time periods relative to target population cohort index
 #'
 #' @param connection  The database connection
-#' @param oracleTempSchema  The temp schema if using oracle
+#' @param tempEmulationSchema  The temp schema if using oracle
 #' @param cdmDatabaseSchema  The schema of the OMOP CDM data
 #' @param cdmVersion  version of the OMOP CDM data
 #' @param cohortTable  the table name that contains the target population cohort
 #' @param rowIdField  string representing the unique identifier in the target population cohort
 #' @param aggregated  whether the covariate should be aggregated
 #' @param cohortId  cohort id for the target population cohort
+#' @param targetId  cohort id for the target population cohort
+
 #' @param covariateSettings  settings for the covariate cohorts and time periods
 #'
 #' @return
@@ -422,14 +495,16 @@ createCohortCovariateSettings <- function(covariateName, covariateId,
 #'
 #' @export
 getCohortCovariateData <- function(connection,
-                                   oracleTempSchema = NULL,
+                                   tempEmulationSchema = NULL,
                                    cdmDatabaseSchema,
                                    cdmVersion = "5",
                                    cohortTable = "#cohort_person",
                                    rowIdField = "row_id",
                                    aggregated,
-                                   cohortId,
-                                   covariateSettings) {
+                                   targetId,
+                                   covariateSettings,
+                                   ...) {
+  # ParallelLogger::logInfo("inside")
 
   # Some SQL to construct the covariate:
   sql <- paste(
@@ -442,25 +517,31 @@ getCohortCovariateData <- function(connection,
     "where b.cohort_definition_id = @covariate_cohort_id
     group by a.@row_id_field "
   )
+  # ParallelLogger::logInfo("sql constructed")
 
   sql <- SqlRender::render(sql,
                            covariate_cohort_schema = covariateSettings$cohortDatabaseSchema,
                            covariate_cohort_table = covariateSettings$cohortTable,
-                           covariate_cohort_id = covariateSettings$cohortId,
+                           covariate_cohort_id = covariateSettings$targetId,
                            cohort_temp_table = cohortTable,
                            row_id_field = rowIdField,
                            startDay=covariateSettings$startDay,
                            covariate_id = covariateSettings$covariateId,
                            endDay=covariateSettings$endDay,
                            countval = covariateSettings$count)
-  sql <- SqlRender::translate(sql, targetDialect = attr(connection, "dbms"), oracleTempSchema = oracleTempSchema)
+  # ParallelLogger::logInfo("sql rendered")
+  sql <- SqlRender::translate(sql, targetDialect = attr(connection, "dbms"), tempEmulationSchema = tempEmulationSchema)
+  # ParallelLogger::logInfo("sql translated")
   # Retrieve the covariate:
   covariates <- DatabaseConnector::querySql(connection, sql)
+  # ParallelLogger::logInfo("db connected")
   # Convert colum names to camelCase:
   colnames(covariates) <- SqlRender::snakeCaseToCamelCase(colnames(covariates))
+  # ParallelLogger::logInfo("snakecase")
   # Construct covariate reference:
   sql <- "select @covariate_id as covariate_id, '@concept_set' as covariate_name,
   456 as analysis_id, -1 as concept_id"
+  # ParallelLogger::logInfo("sql constructed2")
   sql <- SqlRender::render(sql, covariate_id = covariateSettings$covariateId,
                            concept_set=paste(ifelse(covariateSettings$count, 'Number of', ''),
                                              covariateSettings$covariateName,
@@ -468,10 +549,14 @@ getCohortCovariateData <- function(connection,
                                              ' days before:', covariateSettings$startDay, 'days after:', covariateSettings$endDay)
 
   )
+  # ParallelLogger::logInfo("sql rendered2")
   sql <- SqlRender::translate(sql, targetDialect = attr(connection, "dbms"),
-                              oracleTempSchema = oracleTempSchema)
+                              tempEmulationSchema = tempEmulationSchema)
+
+  # ParallelLogger::logInfo("sql translated2")
   # Retrieve the covariateRef:
   covariateRef  <- DatabaseConnector::querySql(connection, sql)
+  # ParallelLogger::logInfo("db")
   colnames(covariateRef) <- SqlRender::snakeCaseToCamelCase(colnames(covariateRef))
 
   analysisRef <- data.frame(analysisId = 4,
@@ -481,13 +566,16 @@ getCohortCovariateData <- function(connection,
                             endDay = 0,
                             isBinary = "Y",
                             missingMeansZero = "Y")
-
+  # ParallelLogger::logInfo("analysis ref")
   metaData <- list(sql = sql, call = match.call())
   result <- Andromeda::andromeda(covariates = covariates,
                                  covariateRef = covariateRef,
                                  analysisRef = analysisRef)
+  # ParallelLogger::logInfo("result")
   attr(result, "metaData") <- metaData
+  # ParallelLogger::logInfo("attr")
   class(result) <- "CovariateData"
+  # ParallelLogger::logInfo("class assigned")
   return(result)
 }
 
@@ -509,12 +597,16 @@ getScoreSummaries <- function(prediction){
 
 getSurvivalInfo <- function(plpData, prediction){
 
-  population <- PatientLevelPrediction::createStudyPopulation(plpData = plpData,
-                                                              outcomeId = 7746,
-                                                              removeSubjectsWithPriorOutcome = T,
+  populationSettings <- createStudyPopulationSettings(removeSubjectsWithPriorOutcome = T,
                                                               requireTimeAtRisk = T, minTimeAtRisk = 364,
                                                               riskWindowStart = 1,
                                                               riskWindowEnd = 10*365)
+
+
+  population <- PatientLevelPrediction::createStudyPopulation(plpData = plpData,
+                                                              outcomeId = 7746,
+                                                              populationSettings = populationSettings
+                                                              )
 
   data <- merge(population, prediction[, c('rowId','value')], by='rowId')
   data$daysToEvent[is.na(data$daysToEvent)] <- data$survivalTime[is.na(data$daysToEvent)]
@@ -543,16 +635,35 @@ getSurvivalInfo <- function(plpData, prediction){
 
 aucPerYear <- function(prediction, year){
   temp <- prediction[prediction$year==year,]
+
+  # print(paste("Year:", year, "Unique outcome counts:", unique(temp$outcomeCount)))
+  
+  if (length(unique(temp$outcomeCount)) < 2) {
+    warning(paste("Year", year, "has only one level in 'truth'. Skipping AUC calculation."))
+    return(NA)
+  }
+
   auc <- PatientLevelPrediction::computeAuc(temp)
   return(auc)
 }
 
 getAUCbyYear <- function(plpResult){
-
+  
   res <- plpResult
+  str(res$prediction)
+  attr(res$prediction, "metaData")$modelType <- attr(res$prediction, "metaData")$predictionType
+
   res$prediction$year <- format(as.Date(res$prediction$cohortStartDate, format="%Y-%m-%d"),"%Y")
 
-  aucs <- lapply(unique(res$prediction$year), function(x) aucPerYear(prediction = res$prediction, year = x ))
+  # aucs <- lapply(unique(res$prediction$year), function(x) aucPerYear(prediction = res$prediction, year = x ))
+  aucs <- lapply(unique(res$prediction$year), function(x) {
+    if (sum(res$prediction$outcomeCount[res$prediction$year == x]) == 0) {
+      print(paste(year, unique(res$prediction[prediction$year==year,]$outcomeCount)))
+      return(NA)  # Assign NA for years with no events
+    }
+    aucPerYear(prediction = res$prediction, year = x)
+  })
+
   size <- lapply(unique(res$prediction$year), function(x) nrow(res$prediction[res$prediction$year== x, ]))
 
   result <- data.frame(year= unique(res$prediction$year),

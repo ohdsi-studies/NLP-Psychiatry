@@ -6,6 +6,7 @@
 #devtools::install_github("OHDSI/PatientLevelPrediction")
 #devtools::install_github("ohdsi-studies/BipolarMisclassificationValidation")
 #devtools::install_github("OHDSI/DatabaseConnector")
+devtools::load_all("/data/fmoomtaheen/BipolarMisclassificationValidation")
 
 library(BipolarMisclassificationValidation)
 
