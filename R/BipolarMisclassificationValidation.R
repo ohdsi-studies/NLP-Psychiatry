@@ -18,7 +18,7 @@
 
 #' BipolarMisclassificationValidation
 #'
-#' @docType package
+#' @docType _PACKAGE
 #' @name BipolarMisclassificationValidation
 #' @importFrom magrittr %>%
 NULL

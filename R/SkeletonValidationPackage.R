@@ -18,7 +18,7 @@
 
 #' SkeletonValidationPackage
 #'
-#' @docType package
+#' @docType _PACKAGE
 #' @name SkeletonValidationPackage
 #' @import DatabaseConnector
 NULL

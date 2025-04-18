@@ -1,4 +1,5 @@
 
+
 #' Execute the validation study
 #'
 #' @details
@@ -14,7 +15,7 @@
 #' @param cohortDatabaseSchema Schema name where intermediate data can be stored. You will need to have
 #'                             write priviliges in this schema. Note that for SQL Server, this should
 #'                             include both the database and schema name, for example 'cdm_data.dbo'.
-#' @param oracleTempSchema     Should be used in Oracle to specify a schema where the user has write
+#' @param tempEmulationSchema     Should be used in Oracle to specify a schema where the user has write
 #'                             priviliges for storing temporary tables.
 #' @param cohortTable          The name of the table that will be created in the work database schema.
 #'                             This table will hold the exposure and outcome cohorts used in this
@@ -32,7 +33,7 @@ execute <- function(connectionDetails,
                     databaseName,
                     cdmDatabaseSchema,
                     cohortDatabaseSchema,
-                    oracleTempSchema,
+                    tempEmulationSchema,
                     cohortTable,
                     outputFolder,
                     viewModel = F,
@@ -58,7 +59,7 @@ execute <- function(connectionDetails,
                   cdmDatabaseSchema=cdmDatabaseSchema,
                   cohortDatabaseSchema=cohortDatabaseSchema,
                   cohortTable=cohortTable,
-                  oracleTempSchema = oracleTempSchema,
+                  tempEmulationSchema = tempEmulationSchema,
                   outputFolder = outputFolder,
                   restrictToAdults = restrictToAdults)
   }
@@ -71,19 +72,22 @@ execute <- function(connectionDetails,
                               cdmDatabaseSchema = cdmDatabaseSchema,
                               cohortDatabaseSchema = cohortDatabaseSchema,
                               cohortTable = cohortTable,
-                              cohortId = 12292,
+                              targetId = 12292,
                               outcomeDatabaseSchema = cohortDatabaseSchema,
                               outcomeTable = cohortTable,
                               outcomeId = 7746,
-                              oracleTempSchema = oracleTempSchema,
+                              tempEmulationSchema = tempEmulationSchema,
                               sampleSize = sampleSize)
 
-    population <-  PatientLevelPrediction::createStudyPopulation(plpData = plpData,
-                                                                 outcomeId = 7746,
-                                                                 removeSubjectsWithPriorOutcome = T,
+    populationSettings <- createStudyPopulationSettings(removeSubjectsWithPriorOutcome = T,
                                                                  requireTimeAtRisk = T, minTimeAtRisk = 364,
                                                                  riskWindowStart = 1,
                                                                  riskWindowEnd = 365)
+
+    population <-  PatientLevelPrediction::createStudyPopulation(plpData = plpData,
+                                                                 outcomeId = 7746,
+                                                                 populationSettings = populationSettings
+                                                                 )
 
     # apply the model:
     plpModel <- list(model = getModel(),
@@ -97,27 +101,85 @@ execute <- function(connectionDetails,
                      trainingTime = NULL,
                      varImp = NULL,
                      dense = T,
-                     cohortId = 12292,
+                     targetId = 12292,
                      outcomeId = 7746,
-                     covariateMap = NULL,
-                     predict = predictBipolar
+                     covariateMap = NULL
     )
-    class(plpModel) <- 'plpModel'
-    result <- PatientLevelPrediction::applyModel(population = population,
-                                                 plpData = plpData,
-                                                 plpModel = plpModel)
 
+    class(plpModel) <- "plpModel"
+    attr(plpModel, "predictionFunction") <- "predictBipolar"
+    attr(plpModel, "saveType") <- "RtoJson"
+
+    plpModel <- augmentManualPlpModel(plpModel)
+
+    result <- list()
+
+    # Predict
+    result$model <- plpModel
+    result$prediction <- PatientLevelPrediction::predictPlp(
+      plpModel = plpModel,
+      plpData = plpData,
+      population = population
+    )
+
+    # Set metadata (keep evaluationColumn as 'value')
+    attr(result$prediction, "metaData") <- list(
+      modelType = "binary",
+      predictionType = "binary",
+      evaluationColumn = "value"
+    )
+
+
+    # fix for error
+    result$prediction <- result$prediction[
+      !is.na(result$prediction$outcomeCount) &
+      !is.na(result$prediction$value),
+    ]
+    # print("keeping evaluable patient only\n")
+
+    # Convert score to probability
+    result$prediction$value <- 1 / (1 + exp(-result$prediction$value))
+
+    # Add preferenceScore if missing
+    result$prediction$preferenceScore <- result$prediction$value
+
+
+    # Ensure evaluation column exists
+    evalColumn <- attr(result$prediction, "metaData")$evaluationColumn
+    if (!evalColumn %in% colnames(result$prediction)) {
+      result$prediction[[evalColumn]] <- result$prediction$value
+    }
+
+    # Add expected 'evaluationType' column
+    result$prediction$evaluationType <- "Test"
+
+    # print(table(result$prediction$outcomeCount))
+    # print(summary(result$prediction$daysToEvent))
+
+
+    # Evaluate
+    result$performanceEvaluation <- PatientLevelPrediction::evaluatePlp(
+      prediction = result$prediction,
+      typeColumn = "evaluationType"
+    )
+
+    
     result$inputSetting$database <- databaseName
+
 
     # do the predicted risk to surivial spline
     require('survival')
 
-    pop10 <- PatientLevelPrediction::createStudyPopulation(plpData = plpData,
-                                                                outcomeId = 7746,
-                                                                removeSubjectsWithPriorOutcome = T,
+    populationSettings <- createStudyPopulationSettings(removeSubjectsWithPriorOutcome = T,
                                                                 requireTimeAtRisk = T, minTimeAtRisk = 364,
                                                                 riskWindowStart = 1,
                                                                 riskWindowEnd = 10*365)
+
+    pop10 <- PatientLevelPrediction::createStudyPopulation(plpData = plpData,
+                                                                outcomeId = 7746,
+                                                                populationSettings = populationSettings
+                                                                )
+    ParallelLogger::logInfo("pop10 created")
 
     pop10 <- merge(result$prediction[, !colnames(result$prediction)%in%c('survivalTime','outcomeCount')],
           pop10[, colnames(pop10)%in%c('rowId','survivalTime','outcomeCount')],
@@ -125,12 +187,16 @@ execute <- function(connectionDetails,
 
     mfit <- survival::coxph(survival::Surv(survivalTime, outcomeCount) ~ survival::pspline(value, df=4),
                   data=pop10)
+
+
     ptemp <- stats::termplot(mfit, se=TRUE, plot=FALSE)
     riskterm <- ptemp$value # this will be a data frame
     #center <- with(riskterm, y[x==0])
     center <- riskterm$y[which.min(abs(riskterm$x-0))]
     ytemp <- riskterm$y + outer(riskterm$se, c(0, -1.96, 1.96), '*')
     sdata <- data.frame(x=riskterm$x, y= exp(ytemp - center))
+
+
     splinePlot <- ggplot2::ggplot(sdata ,  ggplot2::aes(x, y.1))+
       ggplot2::geom_line(data=sdata)+
       ggplot2::geom_ribbon(data=sdata, ggplot2::aes(ymin=y.2,ymax=y.3),alpha=0.3) +
@@ -138,20 +204,22 @@ execute <- function(connectionDetails,
       ggplot2::scale_x_continuous(breaks = c(-1:6)*5) +
       ggplot2::coord_cartesian(ylim = c(0, max(ceiling(sdata$y.1))*1.2))
 
+
     result$spline <- list(mfit=mfit,
                           splinePlot = splinePlot)
 
     # get stats for each score - check potential privacy issues?
-    scoreThres <- getScoreSummaries(result$prediction)
+    scoreThres <- as.data.frame(getScoreSummaries(result$prediction))
     result$scoreThreshold <- scoreThres
+  
 
     # get survival plots
     survInfo <- getSurvivalInfo(plpData = plpData, prediction = result$prediction)
     result$survInfo <- survInfo
 
-
     # get AUC per index year
     result$yauc <- getAUCbyYear(result)
+
 
     if(!dir.exists(file.path(outputFolder,databaseName))){
       dir.create(file.path(outputFolder,databaseName))
@@ -164,6 +232,12 @@ execute <- function(connectionDetails,
   # submitted to the network study manager
 
   # results saved to outputFolder/databaseName
+  # str(result)
+  # class(result$model)
+  # is.null(result$model)
+  # inherits(result$model, "plpModel")
+
+
   if (packageResults) {
     ParallelLogger::logInfo("Packaging results")
     packageResults(outputFolder = file.path(outputFolder,databaseName),

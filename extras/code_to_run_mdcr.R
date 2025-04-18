@@ -1,7 +1,8 @@
 # INSTALLING (uncomment to install)
+.libPaths("/data/fmoomtaheen/R_libs_user")
 
 # install.packages('devtools')
-library(devtools)
+# library(devtools)
 
 # devtools::install_github("OHDSI/OhdsiSharing")
 # devtools::install_github("OHDSI/FeatureExtraction", dependencies=TRUE, force=TRUE)
@@ -9,8 +10,6 @@ library(devtools)
 # devtools::install_github("OHDSI/DatabaseConnector", dependencies=TRUE,force=TRUE)
 # devtools::install_github("OHDSI/SqlRender", dependencies=TRUE,force=TRUE)
 # devtools::install_github("OHDSI/PatientLevelPrediction", dependencies=TRUE,force=TRUE)
-
-library(BipolarMisclassificationValidation)
 library(OhdsiSharing)
 library(FeatureExtraction)
 library(PatientLevelPrediction)
@@ -23,6 +22,7 @@ library(getPass)
 if (!requireNamespace("getPass", quietly = TRUE)) {
   install.packages("getPass")
 }
+mypassword = getPass::getPass("Enter your database password")
 
 
 # USER INPUTS
@@ -36,39 +36,40 @@ minCellCount <- 0
 restrictToAdults <- FALSE
 
 # The folder where the study intermediate and result files will be written:
-outputFolder <- "./bipolarValidationResults"
+outputFolder <- "/data/fmoomtaheen/bipolarValidationResults/mdcr/"
 
 # Specify where the temporary files (used by the ff package) will be created:
-options(fftempdir = "location with space to save big data")
+options(fftempdir = "/data/fmoomtaheen/tmp/")
 
 
 # Details for connecting to the server:
-dbms <- "you dbms"
-user <- 'your username'
-pw <- getPass::getPass("Enter your database password")
-server <- 'your server'
-port <- 'your port'
-
+dbms <- "postgresql"
+user <- 'fmoomtaheen'
+server <- 'localhost/truven'
+port <- '5432'
 
 connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = dbms,
                                                                 server = server,
                                                                 user = user,
-                                                                password = pw,
+                                                                password = mypassword,
                                                                 port = port,
-                                                                pathToDriver = "path to your driver",)
+                                                                pathToDriver = "/data/fmoomtaheen/BipolarMisclassificationValidation/extras/")
 
 # Add the database containing the OMOP CDM data
-cdmDatabaseSchema <- 'cdm database schema'
+cdmDatabaseSchema <- 'mdcr2003_2022'
 # Add a sharebale name for the cdmDatabaseSchema database
-databaseName <- 'Validation Data Name'
+databaseName <- 'mdcr2003_2022'
 # Add a database with read/write access as this is where the cohorts will be generated
-cohortDatabaseSchema <- 'work database schema'
+cohortDatabaseSchema <- 'mdcr_mdd_bd_ohdsi'
 
 tempEmulationSchema <- NULL
 
 # table name where the cohorts will be generated
 cohortTable <- 'bipolarValidationCohort'
 #=======================
+
+
+devtools::load_all("/data/fmoomtaheen/BipolarMisclassificationValidation")
 
 
 BipolarMisclassificationValidation::execute(connectionDetails = connectionDetails,
@@ -85,8 +86,6 @@ BipolarMisclassificationValidation::execute(connectionDetails = connectionDetail
                                             minCellCount = minCellCount,
                                             sampleSize = NULL,
                                             restrictToAdults = restrictToAdults)
-
-
 
 
 

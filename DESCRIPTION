@@ -24,4 +24,6 @@ Imports:
 Suggests:
   testthat
 NeedsCompilation: no
-RoxygenNote: 7.1.0
+RoxygenNote: 7.3.2
+Encoding: UTF-8
+
