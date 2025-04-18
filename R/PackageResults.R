@@ -46,42 +46,32 @@ packageResults <- function(outputFolder,
     if(minCellCount==0){
       minCellCount <- NULL
     }
-    # result <- PatientLevelPrediction::transportPlp(plpResult, save = F,
-    #                                                n=minCellCount,
-    #                                                includeEvaluationStatistics=T,
-    #                                                includeThresholdSummary=T,
-    #                                                includeDemographicSummary=T,
-    #                                                includeCalibrationSummary =T,
-    #                                                includePredictionDistribution=T,
-    #                                                includeCovariateSummary=T)
-    # cat("before shareable\n")
 
-    result <- PatientLevelPrediction::savePlpShareable(plpResult, saveDirectory = exportFolder,
-                                                   minCellCount=minCellCount)
-                                                  #  includeEvaluationStatistics=T,
-                                                  #  includeThresholdSummary=T,
-                                                  #  includeDemographicSummary=T,
-                                                  #  includeCalibrationSummary =T,
-                                                  #  includePredictionDistribution=T,
-                                                  #  includeCovariateSummary=T)
+    # Save the shareable PLP result
+    PatientLevelPrediction::savePlpShareable(plpResult, saveDirectory = exportFolder, minCellCount = minCellCount)
 
-    # cat("after\n")
-    #==== remove low counts from extras:
-    if(!is.null(minCellCount)){
-      if(minCellCount>0){
-        result$survInfo <- NULL
-      }
+    # Load the modified PLP result from the export folder
+    result <- readRDS(file.path(exportFolder, 'validationResults.rds'))
+
+
+    if (!is.data.frame(result$scoreThreshold)) {
+      result$scoreThreshold <- as.data.frame(result$scoreThreshold)
     }
 
-    # scoreThreshold
-    removeId <- result$scoreThreshold[,'N'] < minCellCount | result$scoreThreshold[,'O'] < minCellCount
-    result$scoreThreshold[removeId,c('N','O','popN','sensitivity','PPV')] <- -1
+    #==== remove low counts from extras:
+    if(!is.null(minCellCount) && minCellCount>0){
+      result$survInfo <- NULL
 
-    # yauc
-    removeId <- result$yauc$N < minCellCount
-    result$yauc[removeId, 'auc'] <- -1
-    result$yauc[removeId, 'N'] <- -1
-    # cat("before save\n")
+      # scoreThreshold
+      removeId <- result$scoreThreshold[,'N'] < minCellCount | result$scoreThreshold[,'O'] < minCellCount
+      result$scoreThreshold[removeId,c('N','O','popN','sensitivity','PPV')] <- -1
+
+      # yauc
+      removeId <- result$yauc$N < minCellCount
+      result$yauc[removeId, 'auc'] <- -1
+      result$yauc[removeId, 'N'] <- -1
+    }
+
     saveRDS(result, file.path(exportFolder, 'validationResults.rds'))
 
   }

@@ -78,7 +78,6 @@ execute <- function(connectionDetails,
                               outcomeId = 7746,
                               tempEmulationSchema = tempEmulationSchema,
                               sampleSize = sampleSize)
-    # ParallelLogger::logInfo("get bipolar data done")
 
     populationSettings <- createStudyPopulationSettings(removeSubjectsWithPriorOutcome = T,
                                                                  requireTimeAtRisk = T, minTimeAtRisk = 364,
@@ -89,8 +88,6 @@ execute <- function(connectionDetails,
                                                                  outcomeId = 7746,
                                                                  populationSettings = populationSettings
                                                                  )
-
-    ParallelLogger::logInfo("create study population done")
 
     # apply the model:
     plpModel <- list(model = getModel(),
@@ -107,56 +104,60 @@ execute <- function(connectionDetails,
                      targetId = 12292,
                      outcomeId = 7746,
                      covariateMap = NULL
-                    #  predictionFunction = "predictBipolar"
     )
-
-    # ParallelLogger::logInfo("applying Models done")
-    # cat("model apply done\n")
 
     class(plpModel) <- "plpModel"
     attr(plpModel, "predictionFunction") <- "predictBipolar"
     attr(plpModel, "saveType") <- "RtoJson"
-    # attr(plpModel, "predictionFunction") <- function(plpModel, data, cohort) {
-    #   predictBipolar(plpData = data, population = cohort)
-    # }
+
+    plpModel <- augmentManualPlpModel(plpModel)
 
     result <- list()
 
-    # 1. Predict
+    # Predict
     result$model <- plpModel
     result$prediction <- PatientLevelPrediction::predictPlp(
       plpModel = plpModel,
       plpData = plpData,
       population = population
     )
-    # ParallelLogger::logInfo("model Type result\n")
 
-    # 2. Set metadata (keep evaluationColumn as 'value')
+    # Set metadata (keep evaluationColumn as 'value')
     attr(result$prediction, "metaData") <- list(
       modelType = "binary",
       predictionType = "binary",
       evaluationColumn = "value"
     )
 
-    # 3. Sanity check
-    print(attr(result$prediction, "metaData"))
-    evalColumn <- attr(result$prediction, "metaData")$evaluationColumn
-    cat("evalColumn =", evalColumn, "\n")
-    print(head(result$prediction[, c("rowId", "value", "survivalTime", "outcomeCount", "daysToEvent")], 10))
-    str(result$prediction)
 
-    # 4. Ensure evaluation column exists
+    # fix for error
+    result$prediction <- result$prediction[
+      !is.na(result$prediction$outcomeCount) &
+      !is.na(result$prediction$value),
+    ]
+    # print("keeping evaluable patient only\n")
+
+    # Convert score to probability
+    result$prediction$value <- 1 / (1 + exp(-result$prediction$value))
+
+    # Add preferenceScore if missing
+    result$prediction$preferenceScore <- result$prediction$value
+
+
+    # Ensure evaluation column exists
+    evalColumn <- attr(result$prediction, "metaData")$evaluationColumn
     if (!evalColumn %in% colnames(result$prediction)) {
       result$prediction[[evalColumn]] <- result$prediction$value
     }
 
-    # 5. Add expected 'evaluationType' column
+    # Add expected 'evaluationType' column
     result$prediction$evaluationType <- "Test"
 
-    print(table(result$prediction$outcomeCount))
-    print(summary(result$prediction$daysToEvent))
+    # print(table(result$prediction$outcomeCount))
+    # print(summary(result$prediction$daysToEvent))
 
-    # 6. Evaluate
+
+    # Evaluate
     result$performanceEvaluation <- PatientLevelPrediction::evaluatePlp(
       prediction = result$prediction,
       typeColumn = "evaluationType"
@@ -164,7 +165,7 @@ execute <- function(connectionDetails,
 
     
     result$inputSetting$database <- databaseName
-    # ParallelLogger::logInfo("result$input <. databaseName done\n")
+
 
     # do the predicted risk to surivial spline
     require('survival')
@@ -180,22 +181,12 @@ execute <- function(connectionDetails,
                                                                 )
     ParallelLogger::logInfo("pop10 created")
 
-    # Check column names
-    ParallelLogger::logInfo(colnames(result$prediction))
-    ParallelLogger::logInfo(colnames(pop10))
-
-
     pop10 <- merge(result$prediction[, !colnames(result$prediction)%in%c('survivalTime','outcomeCount')],
           pop10[, colnames(pop10)%in%c('rowId','survivalTime','outcomeCount')],
           by = 'rowId', all.x=T)
 
-    # ParallelLogger::logInfo("merged")
-    # print(attributes(result$prediction$metadata))
-
     mfit <- survival::coxph(survival::Surv(survivalTime, outcomeCount) ~ survival::pspline(value, df=4),
                   data=pop10)
-
-    # ParallelLogger::logInfo("mfit survival")
 
 
     ptemp <- stats::termplot(mfit, se=TRUE, plot=FALSE)
@@ -205,8 +196,6 @@ execute <- function(connectionDetails,
     ytemp <- riskterm$y + outer(riskterm$se, c(0, -1.96, 1.96), '*')
     sdata <- data.frame(x=riskterm$x, y= exp(ytemp - center))
 
-    # ParallelLogger::logInfo("before plot")
-
 
     splinePlot <- ggplot2::ggplot(sdata ,  ggplot2::aes(x, y.1))+
       ggplot2::geom_line(data=sdata)+
@@ -215,30 +204,22 @@ execute <- function(connectionDetails,
       ggplot2::scale_x_continuous(breaks = c(-1:6)*5) +
       ggplot2::coord_cartesian(ylim = c(0, max(ceiling(sdata$y.1))*1.2))
 
-    # ParallelLogger::logInfo("after")
-
 
     result$spline <- list(mfit=mfit,
                           splinePlot = splinePlot)
 
-    # ParallelLogger::logInfo("got result")
-
-    # print(attributes(result$prediction$metadata))
     # get stats for each score - check potential privacy issues?
-    scoreThres <- getScoreSummaries(result$prediction)
+    scoreThres <- as.data.frame(getScoreSummaries(result$prediction))
     result$scoreThreshold <- scoreThres
+  
 
     # get survival plots
     survInfo <- getSurvivalInfo(plpData = plpData, prediction = result$prediction)
     result$survInfo <- survInfo
 
-    # ParallelLogger::logInfo("got scored and assigned")
-
     # get AUC per index year
     result$yauc <- getAUCbyYear(result)
 
-
-    # ParallelLogger::logInfo("got auc")
 
     if(!dir.exists(file.path(outputFolder,databaseName))){
       dir.create(file.path(outputFolder,databaseName))
@@ -246,9 +227,6 @@ execute <- function(connectionDetails,
     saveRDS(result, file.path(outputFolder,databaseName,'validationResults.rds'))
 
   }
-
-    # ParallelLogger::logInfo("saved")
-
 
   # package the results: this creates a compressed file with sensitive details removed - ready to be reviewed and then
   # submitted to the network study manager
@@ -261,13 +239,10 @@ execute <- function(connectionDetails,
 
 
   if (packageResults) {
-    # ParallelLogger::logInfo("Packaging results")
+    ParallelLogger::logInfo("Packaging results")
     packageResults(outputFolder = file.path(outputFolder,databaseName),
                    minCellCount = minCellCount)
   }
-
-#  ParallelLogger::logInfo("ready result")
-
 
 
   invisible(NULL)

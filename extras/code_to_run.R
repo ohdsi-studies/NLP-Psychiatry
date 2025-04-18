@@ -1,26 +1,34 @@
 # INSTALLING (uncomment to install)
 
-#install.packages('devtools')
-#devtools::install_github("OHDSI/OhdsiSharing")
-#devtools::install_github("OHDSI/FeatureExtraction")
-#devtools::install_github("OHDSI/PatientLevelPrediction")
-#devtools::install_github("ohdsi-studies/BipolarMisclassificationValidation")
-#devtools::install_github("OHDSI/DatabaseConnector")
+# install.packages('devtools')
+library(devtools)
+
+# devtools::install_github("OHDSI/OhdsiSharing")
+# devtools::install_github("OHDSI/FeatureExtraction", dependencies=TRUE, force=TRUE)
+# devtools::install_github("ohdsi-studies/BipolarMisclassificationValidation", force=TRUE)
+# devtools::install_github("OHDSI/DatabaseConnector", dependencies=TRUE,force=TRUE)
+# devtools::install_github("OHDSI/SqlRender", dependencies=TRUE,force=TRUE)
+# devtools::install_github("OHDSI/PatientLevelPrediction", dependencies=TRUE,force=TRUE)
 
 library(BipolarMisclassificationValidation)
+library(OhdsiSharing)
+library(FeatureExtraction)
+library(PatientLevelPrediction)
+library(DatabaseConnector)
+library(rJava)
+library(getPass)
+
+
 
 if (!requireNamespace("getPass", quietly = TRUE)) {
   install.packages("getPass")
 }
-library(getPass)
-
-mypassword = getPass::getPass("Enter your database password")
 
 
 # USER INPUTS
 #=======================
 # minCellCount is a number (e.g., 0, 5 or 10) - this will
-# remove any cell with a count less than minCellCount when packing the results to share
+# remove any cell with a count less than minCellCount when packing the results to share # nolint
 # you will have a complete copy of the results locally, but the results ready to
 # share will have values less than minCellCount removed.
 minCellCount <- 0
@@ -28,37 +36,40 @@ minCellCount <- 0
 restrictToAdults <- FALSE
 
 # The folder where the study intermediate and result files will be written:
-outputFolder <- "/data/fmoomtaheen/bipolarValidationResults/ccae/"
+outputFolder <- "./bipolarValidationResults"
 
 # Specify where the temporary files (used by the ff package) will be created:
-options(fftempdir = "/data/fmoomtaheen/tmp/")
+options(fftempdir = "location with space to save big data")
 
 
 # Details for connecting to the server:
-dbms <- "postgresql"
-user <- 'fmoomtaheen'
-server <- 'localhost/truven'
-port <- '5432'
+dbms <- "you dbms"
+user <- 'your username'
+pw <- getPass::getPass("Enter your database password")
+server <- 'your server'
+port <- 'your port'
+
 
 connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = dbms,
                                                                 server = server,
                                                                 user = user,
-                                                                password = mypassword,
+                                                                password = pw,
                                                                 port = port,
-                                                                pathToDriver = "/data/fmoomtaheen/BipolarMisclassificationValidation/extras/")
+                                                                pathToDriver = "path to your driver",)
 
 # Add the database containing the OMOP CDM data
-cdmDatabaseSchema <- 'ccae2003_2022'
+cdmDatabaseSchema <- 'cdm database schema'
 # Add a sharebale name for the cdmDatabaseSchema database
-databaseName <- 'ccae2003_2022'
+databaseName <- 'Validation Data Name'
 # Add a database with read/write access as this is where the cohorts will be generated
-cohortDatabaseSchema <- 'ccae_mdd_bd_ohdsi'
+cohortDatabaseSchema <- 'work database schema'
 
-oracleTempSchema <- NULL
+tempEmulationSchema <- NULL
 
 # table name where the cohorts will be generated
 cohortTable <- 'bipolarValidationCohort'
 #=======================
+
 
 BipolarMisclassificationValidation::execute(connectionDetails = connectionDetails,
                                             cdmDatabaseSchema = cdmDatabaseSchema,
@@ -66,7 +77,7 @@ BipolarMisclassificationValidation::execute(connectionDetails = connectionDetail
                                             cohortTable = cohortTable,
                                             outputFolder = outputFolder,
                                             databaseName = databaseName,
-                                            oracleTempSchema = oracleTempSchema,
+                                            tempEmulationSchema = tempEmulationSchema,
                                             viewModel = F,
                                             createCohorts = T,
                                             runValidation = T,
@@ -74,3 +85,8 @@ BipolarMisclassificationValidation::execute(connectionDetails = connectionDetail
                                             minCellCount = minCellCount,
                                             sampleSize = NULL,
                                             restrictToAdults = restrictToAdults)
+
+
+
+
+
