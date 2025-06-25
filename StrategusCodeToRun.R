@@ -19,6 +19,15 @@ library(Strategus)
 library(DatabaseConnector)
 library(ParallelLogger)
 
+# Download and configure JDBC drivers for PostgreSQL
+tryCatch({
+  DatabaseConnector::downloadJdbcDrivers("postgresql")
+  ParallelLogger::logInfo("PostgreSQL JDBC driver downloaded successfully")
+}, error = function(e) {
+  ParallelLogger::logWarn(paste("Could not download PostgreSQL JDBC driver:", e$message))
+  ParallelLogger::logWarn("Proceeding with existing drivers...")
+})
+
 # ******************************************************************************
 # CONFIGURATION SECTION - MODIFY THESE SETTINGS FOR YOUR ENVIRONMENT
 # ******************************************************************************
@@ -97,13 +106,46 @@ executionSettings <- Strategus::createCdmExecutionSettings(
   maxCores = maxCores
 )
 
-# Execute the study
+# Execute the study with enhanced error handling
 ParallelLogger::logInfo("Executing Strategus study...")
-Strategus::execute(
-  analysisSpecifications = analysisSpecifications,
-  executionSettings = executionSettings,
-  connectionDetails = connectionDetails
-)
+
+tryCatch({
+  # Test database connection first
+  ParallelLogger::logInfo("Testing database connection...")
+  connection <- DatabaseConnector::connect(connectionDetails)
+  DatabaseConnector::disconnect(connection)
+  ParallelLogger::logInfo("Database connection test successful")
+
+  # Execute the study
+  result <- Strategus::execute(
+    analysisSpecifications = analysisSpecifications,
+    executionSettings = executionSettings,
+    connectionDetails = connectionDetails
+  )
+
+  ParallelLogger::logInfo("Strategus execution completed successfully")
+
+}, error = function(e) {
+  ParallelLogger::logError(paste("Strategus execution failed:", e$message))
+  ParallelLogger::logError("Full error details:")
+  ParallelLogger::logError(paste(capture.output(traceback()), collapse = "\n"))
+
+  # Provide specific guidance for common errors
+  if (grepl("JDBC", e$message, ignore.case = TRUE)) {
+    ParallelLogger::logError("JDBC driver issue detected. Try:")
+    ParallelLogger::logError("1. DatabaseConnector::downloadJdbcDrivers('postgresql')")
+    ParallelLogger::logError("2. Check database connection parameters")
+  }
+
+  if (grepl("metadata", e$message, ignore.case = TRUE)) {
+    ParallelLogger::logError("CDM metadata collection failed. Check:")
+    ParallelLogger::logError("1. Database connection permissions")
+    ParallelLogger::logError("2. CDM schema access")
+    ParallelLogger::logError("3. OMOP CDM version compatibility")
+  }
+
+  stop(e)
+})
 
 ParallelLogger::logInfo("Study execution completed")
 
