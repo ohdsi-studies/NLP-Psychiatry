@@ -67,7 +67,6 @@ keyring/
 results/
 data/
 *.rds
-*.csv
 *.zip
 
 # Large files
