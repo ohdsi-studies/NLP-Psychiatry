@@ -44,14 +44,22 @@ This study uses the **OHDSI Strategus framework** for coordinated multi-database
 
 ## Quick Start
 
-### 1. Test Migration (Verify Setup)
+### 1. Install OHDSI Packages (Required)
 ```r
-source("TestMigration.R")
+# Option 1: Use the installation script
+source("InstallOhdsiPackages.R")
+
+# Option 2: Use the built-in function
+installOhdsiPackages()
+
+# Option 3: Manual installation
+remotes::install_github("OHDSI/CohortDiagnostics")
+# ... install other packages as needed
 ```
 
-### 2. Install OHDSI Packages
+### 2. Test Migration (Verify Setup)
 ```r
-installOhdsiPackages()
+source("TestMigration.R")
 ```
 
 ### 3. Create Analysis Specification
@@ -66,6 +74,8 @@ Edit `StrategusCodeToRun.R` with your database details
 ```r
 source("StrategusCodeToRun.R")
 ```
+
+**Note**: If you get errors about missing packages like `CohortDiagnostics`, run the installation script first: `source("InstallOhdsiPackages.R")`
 
 ## Documentation
 

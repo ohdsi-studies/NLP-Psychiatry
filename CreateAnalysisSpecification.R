@@ -13,6 +13,14 @@ library(CohortGenerator)
 library(ParallelLogger)
 library(magrittr)  # For %>% pipe operator
 
+# Check for CohortDiagnostics and provide helpful error message
+if (!requireNamespace("CohortDiagnostics", quietly = TRUE)) {
+  stop("CohortDiagnostics package is required but not installed.\n",
+       "Please install it by running: installOhdsiPackages()\n",
+       "Or manually: remotes::install_github('OHDSI/CohortDiagnostics')")
+}
+library(CohortDiagnostics)
+
 # ******************************************************************************
 # STUDY CONFIGURATION
 # ******************************************************************************
@@ -99,26 +107,26 @@ analysisSpecifications <- analysisSpecifications %>%
   Strategus::addModuleSpecifications(bipolarModuleSpecifications)
 
 # ============================================================================
-# COHORT DIAGNOSTICS MODULE (Optional - commented out due to missing package)
+# COHORT DIAGNOSTICS MODULE
 # ============================================================================
-# ParallelLogger::logInfo("Setting up CohortDiagnostics module")
-#
-# cdModule <- CohortDiagnosticsModule$new()
-# cohortDiagnosticsModuleSpecifications <- cdModule$createModuleSpecifications(
-#   runInclusionStatistics = TRUE,
-#   runIncludedSourceConcepts = TRUE,
-#   runOrphanConcepts = TRUE,
-#   runTimeSeries = FALSE,
-#   runVisitContext = TRUE,
-#   runBreakdownIndexEvents = TRUE,
-#   runIncidenceRate = TRUE,
-#   runCohortRelationship = TRUE,
-#   runTemporalCohortCharacterization = TRUE
-# )
-#
-# # Add to analysis specification
-# analysisSpecifications <- analysisSpecifications %>%
-#   Strategus::addModuleSpecifications(cohortDiagnosticsModuleSpecifications)
+ParallelLogger::logInfo("Setting up CohortDiagnostics module")
+
+cdModule <- CohortDiagnosticsModule$new()
+cohortDiagnosticsModuleSpecifications <- cdModule$createModuleSpecifications(
+  runInclusionStatistics = TRUE,
+  runIncludedSourceConcepts = TRUE,
+  runOrphanConcepts = TRUE,
+  runTimeSeries = FALSE,
+  runVisitContext = TRUE,
+  runBreakdownIndexEvents = TRUE,
+  runIncidenceRate = TRUE,
+  runCohortRelationship = TRUE,
+  runTemporalCohortCharacterization = TRUE
+)
+
+# Add to analysis specification
+analysisSpecifications <- analysisSpecifications %>%
+  Strategus::addModuleSpecifications(cohortDiagnosticsModuleSpecifications)
 
 # ******************************************************************************
 # SAVE ANALYSIS SPECIFICATION
