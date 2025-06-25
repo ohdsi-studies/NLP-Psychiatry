@@ -98,10 +98,21 @@ analysisSpecifications <- ParallelLogger::loadSettingsFromJson(analysisSpecifica
 ParallelLogger::logInfo("Loaded analysis specification")
 
 # Create execution settings
+cohort_table_names_for_execution <- CohortGenerator::getCohortTableNames(cohortTable = "cohort")
+
+# Debug: Print execution settings
+ParallelLogger::logInfo("DEBUG: Creating execution settings...")
+ParallelLogger::logInfo(paste("DEBUG: workDatabaseSchema =", workDatabaseSchema))
+ParallelLogger::logInfo(paste("DEBUG: cdmDatabaseSchema =", cdmDatabaseSchema))
+ParallelLogger::logInfo("DEBUG: cohortTableNames for execution:")
+for (name in names(cohort_table_names_for_execution)) {
+  ParallelLogger::logInfo(paste("DEBUG:", name, "=", cohort_table_names_for_execution[[name]]))
+}
+
 executionSettings <- Strategus::createCdmExecutionSettings(
   workDatabaseSchema = workDatabaseSchema,
   cdmDatabaseSchema = cdmDatabaseSchema,
-  cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = "cohort"),
+  cohortTableNames = cohort_table_names_for_execution,
   workFolder = file.path(outputFolder, "strategusWork"),
   resultsFolder = file.path(outputFolder, "strategusOutput"),
   minCellCount = minCellCount,
@@ -117,11 +128,48 @@ tryCatch({
   cohort_table_names <- CohortGenerator::getCohortTableNames(
     cohortTable = "cohort"
   )
+
+  # Debug: Print table names and schema
+  ParallelLogger::logInfo(paste("DEBUG: Work database schema:", workDatabaseSchema))
+  ParallelLogger::logInfo(paste("DEBUG: Cohort table names:",
+                                paste(names(cohort_table_names), collapse = ", ")))
+  for (name in names(cohort_table_names)) {
+    ParallelLogger::logInfo(paste("DEBUG:", name, "=", cohort_table_names[[name]]))
+  }
+
   CohortGenerator::createCohortTables(
     connectionDetails = connectionDetails,
     cohortDatabaseSchema = workDatabaseSchema,
     cohortTableNames = cohort_table_names
   )
+
+  # Debug: Verify tables exist after creation
+  ParallelLogger::logInfo("DEBUG: Verifying table existence after creation...")
+
+  # Check what tables actually exist in the schema
+  schema_tables_sql <- paste0("SELECT table_name FROM information_schema.tables WHERE ",
+                             "table_schema = '", workDatabaseSchema, "'")
+  existing_tables <- DatabaseConnector::querySql(connection, schema_tables_sql)
+  ParallelLogger::logInfo(paste("DEBUG: All tables in schema:",
+                               paste(existing_tables$TABLE_NAME, collapse = ", ")))
+
+  # Check each expected table
+  for (name in names(cohort_table_names)) {
+    table_name <- cohort_table_names[[name]]
+    sql <- paste0("SELECT COUNT(*) FROM information_schema.tables WHERE ",
+                  "table_schema = '", workDatabaseSchema, "' AND ",
+                  "table_name = '", table_name, "'")
+    result <- DatabaseConnector::querySql(connection, sql)
+    ParallelLogger::logInfo(paste("DEBUG: Table", table_name, "exists:", result[1, 1] > 0))
+
+    # Also try checking if table exists with different case
+    sql_lower <- paste0("SELECT COUNT(*) FROM information_schema.tables WHERE ",
+                       "LOWER(table_schema) = LOWER('", workDatabaseSchema, "') AND ",
+                       "LOWER(table_name) = LOWER('", table_name, "')")
+    result_lower <- DatabaseConnector::querySql(connection, sql_lower)
+    ParallelLogger::logInfo(paste("DEBUG: Table", table_name, "exists (case-insensitive):",
+                                 result_lower[1, 1] > 0))
+  }
 
   ParallelLogger::logInfo("Cohort tables created successfully")
   DatabaseConnector::disconnect(connection)
