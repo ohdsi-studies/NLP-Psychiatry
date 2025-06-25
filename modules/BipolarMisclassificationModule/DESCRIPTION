@@ -1,0 +1,33 @@
+Package: BipolarMisclassificationModule
+Type: Package
+Title: Strategus Module for Bipolar Misclassification Validation
+Version: 1.0.0
+Date: 2025-06-25
+Author: Christophe Lambert, Jenna Reps
+Maintainer: Christophe Lambert <cglambert@unm.edu>
+Description: A Strategus module that validates a predictive model for identifying 
+    patients initially diagnosed with Major Depressive Disorder (MDD) who are 
+    likely to be rediagnosed with Bipolar Disorder within 1 year. This module 
+    implements the bipolar misclassification validation study as part of the 
+    NLP-Psychiatry multi-component study framework.
+License: Apache License 2.0
+Depends:
+  R (>= 4.2.0),
+  Strategus,
+  DatabaseConnector,
+  PatientLevelPrediction (>= 4.0.0)
+Imports:
+  R6,
+  ParallelLogger,
+  CohortGenerator,
+  FeatureExtraction,
+  dplyr,
+  tibble,
+  ff
+Suggests:
+  testthat,
+  knitr,
+  rmarkdown
+NeedsCompilation: no
+RoxygenNote: 7.3.2
+Encoding: UTF-8

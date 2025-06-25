@@ -1,30 +1,77 @@
-StudyRepoTemplate
-=================
+Study Title: NLP-Psychiatry
+===========================
 
-An OHDSI study repository is expected to have a README.md file where the header conforms to a standard. A template README file is provided here:
+<img src="https://img.shields.io/badge/Study%20Status-Started-blue.svg" alt="Study Status: Started">
 
-**[README file template](templateREADME.md)**
+- Analytics use case(s): **Patient-Level Prediction**
+- Study type: **Clinical Application**
+- Tags: **Psychiatry, NLP, Bipolar Disorder, Depression, OHDSI, Strategus**
+- Study lead: **Ming Huang*
+- Study lead forums tag:
+- Study start date:
+- Study end date:
+- Protocol: **[Protocol](https://ohdsiorg.sharepoint.com/:w:/r/sites/Workgroup-Psychiatry/_layouts/15/Doc2.aspx?action=edit&sourcedoc=%7B70fd0235-3cce-412e-af2d-df0eaacd56bc%7D&wdOrigin=TEAMS-MAGLEV.teamsSdk_ns.rwc&wdExp=TEAMS-TREATMENT)**
+- Publications: **-**
+- Results explorer: **-**
 
-When initiating a repository, please copy this file, rename it to 'README.md', and fill in the fields as appropriate.
+This repository contains a multi-component psychiatric prediction study framework using the OHDSI Strategus platform. The study currently includes validation of a bipolar misclassification prediction model and is designed to be extensible for additional psychiatric prediction components.
 
-The information in the repository README file will be used to automatically update the [list of OHDSI research studies](https://data.ohdsi.org/OhdsiStudies/), so it is important to fill in the template accurately, and keep it up-to-date.
 
-## Elements in the README template
+## Background
 
-| Element | Description |
-| ------- | ----------- |
-| [Study title]      | A meaningful title of the research project.            
-| Study status badge | A badge indicating the study status. See [below](#study-status) for valid options. |
-| Analytics use case | One or more analytics use cases included in the study (in a comma-separated list). See [below](#analytics-use-cases) for valid options. |
-| Study type | The type of study. See [below](#study-types) for valid options. |
-| Tags | Zero, one, or more additional keywords that can be used to filter the list of studies. The list of tags is not restricted, but be conservative in making up new tags. For example: `EHDEN` to identify studies that are part of the [EHDEN project](https://www.ehden.eu/). |
-| Study lead | The name of the study lead.|
-| Study lead forums tag | The OHDSI forums tag of the study lead, which can be used to contact the lead. It is recommended to make this a hyperlink to lead's forums profile |
-| Study start date | When did work on the study commence? This date typically indicates when development of the protocol was initiated. Format: [Month] [Day], [Year] (e.g. May 1, 2019)|
-| Study end date | When was the study completed? This typically indicates when the analyses were completed and the results have been collected. Do not enter future (planned) dates here. Format: [Month] [Day], [Year] (e.g. May 1, 2019)| 
-| Protocol | A hyperlink to the protocol. The protocol is expected to be a document in the study repository itself. | 
-| Publications | Zero, one or more hyperlinks to papers produced as part of the study (comma-separated). | 
-| Results explorer | A hyperlink to a web app (e.g. a Shiny app) where the results of the study can be explored. |
+This study framework addresses the critical need for improved psychiatric diagnosis prediction using electronic health records. The initial component focuses on bipolar disorder misclassification - a significant clinical problem where patients with Bipolar Disorder are frequently misdiagnosed as having Major Depressive Disorder (MDD), leading to delayed proper treatment.
+
+### Current Study Components
+
+1. **Bipolar Misclassification Validation**: Validates a predictive model that identifies patients initially diagnosed with MDD who are likely to be rediagnosed with Bipolar Disorder within 1 year.
+
+### Future Planned Components
+
+The framework is designed to accommodate additional psychiatric prediction modules, such as:
+- Suicide risk prediction
+- Treatment response prediction
+- Psychiatric comorbidity identification
+- NLP-based symptom extraction and prediction
+
+## Technical Architecture
+
+This study uses the **OHDSI Strategus framework** for coordinated multi-database execution. The architecture includes:
+
+- **Strategus Study Protocol**: JSON-based analysis specification for multi-component execution
+- **Custom Modules**: Psychiatric prediction modules that integrate with the Strategus ecosystem
+- **Extensible Design**: Framework supports adding new prediction components without disrupting existing functionality
+- **OMOP CDM Compatibility**: Works with standardized healthcare databases across the OHDSI network
+
+## Quick Start
+
+### 1. Test Migration (Verify Setup)
+```r
+source("TestMigration.R")
+```
+
+### 2. Install OHDSI Packages
+```r
+installOhdsiPackages()
+```
+
+### 3. Create Analysis Specification
+```r
+source("CreateAnalysisSpecification.R")
+```
+
+### 4. Configure Database Connection
+Edit `StrategusCodeToRun.R` with your database details
+
+### 5. Execute Study
+```r
+source("StrategusCodeToRun.R")
+```
+
+## Documentation
+
+- **[Migration Guide](MIGRATION_GUIDE.md)**: Comprehensive migration documentation
+- **[Migration Complete](MIGRATION_COMPLETE.md)**: Summary of completed migration
+- **[Module Documentation](modules/BipolarMisclassificationModule/README.md)**: BipolarMisclassificationModule details
 
 ### Study Status
 

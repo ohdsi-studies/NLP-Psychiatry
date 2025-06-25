@@ -1,9 +1,97 @@
-.Rproj.user
+# History files
 .Rhistory
-.RData
-.Ruserdata
-*.html
+.Rapp.history
 
+# Session Data files
+.RData
+
+# User-specific files
+.Ruserdata
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
+.httr-oauth
+
+# knitr and R markdown default cache directories
+*_cache/
+/cache/
+
+# Temporary files created by R markdown
+*.utf8.md
+*.knit.md
+
+# R Environment Variables
+.Renviron
+
+# pkgdown site
+docs/
+
+# translation temp files
+po/*~
+
+# RStudio Connect folder
+rsconnect/
+
+# Strategus execution folders
+StrategusOutput/
+strategusWork/
+strategusOutput/
+strategusExecution/
+
+# Analysis specification output
+AnalysisSpecification/
+
+# Database connection files (security)
+connectionDetails.R
+keyring/
+
+# Log files
+*.log
+
+# Results and data files
+results/
+data/
+*.rds
+*.csv
+*.zip
+
+# Large files
+*.jar
+*.gz
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# renv
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/staging/
+
+# Documents (keep source, ignore generated)
 Documents/*.html
 Documents/*.pdf
 Documents/*.tex
