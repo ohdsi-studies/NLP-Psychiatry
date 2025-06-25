@@ -84,9 +84,9 @@ BipolarMisclassificationModule <- R6::R6Class(
       # Execute the analysis
       tryCatch({
         
-        # Create cohorts if needed
+        # Validate cohorts exist (created by CohortGenerator module)
         if (settings$generateStats) {
-          private$.createCohorts(jobContext, settings, connectionDetails)
+          private$.validateCohorts(jobContext, settings, connectionDetails)
         }
         
         # Run validation if requested
@@ -187,30 +187,36 @@ BipolarMisclassificationModule <- R6::R6Class(
       ))
     },
 
-    # Create cohorts for the study
-    .createCohorts = function(jobContext, settings, connectionDetails) {
-      ParallelLogger::logInfo("Creating cohorts for BipolarMisclassificationModule")
+    # Validate cohorts exist for the study
+    .validateCohorts = function(jobContext, settings, connectionDetails) {
+      ParallelLogger::logInfo("Validating cohorts for BipolarMisclassificationModule")
 
-      # Load cohort definitions
-      cohortDefinitionSet <- CohortGenerator::getCohortDefinitionSet(
-        settingsFileName = file.path(jobContext$moduleExecutionSettings$workSubFolder,
-                                   "BipolarMisclassificationModule", "inst", "settings", "CohortsToCreate.csv"),
-        jsonFolder = file.path(jobContext$moduleExecutionSettings$workSubFolder,
-                             "BipolarMisclassificationModule", "inst", "cohorts"),
-        sqlFolder = file.path(jobContext$moduleExecutionSettings$workSubFolder,
-                            "BipolarMisclassificationModule", "inst", "sql", "sql_server")
-      )
+      # Check that required cohorts exist in the cohort table
+      # The CohortGenerator module should have already created these
+      connection <- DatabaseConnector::connect(connectionDetails)
 
-      # Generate cohorts
-      CohortGenerator::generateCohortSet(
-        connectionDetails = connectionDetails,
-        cdmDatabaseSchema = jobContext$moduleExecutionSettings$cdmDatabaseSchema,
-        cohortDatabaseSchema = jobContext$moduleExecutionSettings$workDatabaseSchema,
-        cohortTableNames = jobContext$moduleExecutionSettings$cohortTableNames,
-        cohortDefinitionSet = cohortDefinitionSet
-      )
+      tryCatch({
+        # Check if the main cohort table exists and has data
+        sql <- "SELECT COUNT(*) as cohort_count FROM @cohort_database_schema.@cohort_table"
+        sql <- SqlRender::render(sql,
+                                cohort_database_schema = jobContext$moduleExecutionSettings$workDatabaseSchema,
+                                cohort_table = jobContext$moduleExecutionSettings$cohortTableNames$cohortTable)
+        sql <- SqlRender::translate(sql, targetDialect = connectionDetails$dbms)
 
-      ParallelLogger::logInfo("Cohort creation completed")
+        result <- DatabaseConnector::querySql(connection, sql)
+        ParallelLogger::logInfo(paste("Found", result$COHORT_COUNT, "cohort records"))
+
+        if (result$COHORT_COUNT == 0) {
+          ParallelLogger::logWarn("No cohort records found - cohorts may not have been generated properly")
+        }
+
+      }, error = function(e) {
+        ParallelLogger::logWarn(paste("Could not validate cohorts:", e$message))
+      }, finally = {
+        DatabaseConnector::disconnect(connection)
+      })
+
+      ParallelLogger::logInfo("Cohort validation completed")
     },
 
     # Run the validation analysis

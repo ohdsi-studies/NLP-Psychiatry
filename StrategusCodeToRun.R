@@ -108,6 +108,31 @@ executionSettings <- Strategus::createCdmExecutionSettings(
   maxCores = maxCores
 )
 
+# Ensure cohort tables are created before execution
+ParallelLogger::logInfo("Creating cohort tables before study execution...")
+tryCatch({
+  connection <- DatabaseConnector::connect(connectionDetails)
+
+  # Create all required cohort tables using CohortGenerator
+  cohort_table_names <- CohortGenerator::getCohortTableNames(
+    cohortTable = "cohort"
+  )
+  CohortGenerator::createCohortTables(
+    connectionDetails = connectionDetails,
+    cohortDatabaseSchema = workDatabaseSchema,
+    cohortTableNames = cohort_table_names
+  )
+
+  ParallelLogger::logInfo("Cohort tables created successfully")
+  DatabaseConnector::disconnect(connection)
+
+}, error = function(e) {
+  ParallelLogger::logWarn(paste("Could not pre-create cohort tables:",
+                                e$message))
+  ParallelLogger::logWarn(paste("Proceeding with execution - tables will be",
+                                "created by modules if needed"))
+})
+
 # Execute the study with enhanced error handling
 ParallelLogger::logInfo("Executing Strategus study...")
 
