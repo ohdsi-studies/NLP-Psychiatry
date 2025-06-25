@@ -42,9 +42,11 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(
 )
 
 # Database schema settings
-cdmDatabaseSchema <- "your_cdm_schema"           # Schema containing OMOP CDM data
+# IMPORTANT: workDatabaseSchema and resultsDatabaseSchema must exist or your user must have CREATE SCHEMA permissions
+# For PostgreSQL, create manually: CREATE SCHEMA IF NOT EXISTS your_work_schema;
+cdmDatabaseSchema <- "your_cdm_schema"           # Schema containing OMOP CDM data (read-only)
 workDatabaseSchema <- "your_work_schema"         # Schema for temporary tables (must have write access)
-resultsDatabaseSchema <- "your_results_schema"   # Schema for storing results
+resultsDatabaseSchema <- "your_results_schema"   # Schema for storing results (must have write access)
 
 # Study execution settings
 outputFolder <- "./StrategusOutput"              # Local folder for study results
@@ -99,7 +101,7 @@ ParallelLogger::logInfo("Loaded analysis specification")
 executionSettings <- Strategus::createCdmExecutionSettings(
   workDatabaseSchema = workDatabaseSchema,
   cdmDatabaseSchema = cdmDatabaseSchema,
-  cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = "nlp_psychiatry_cohort"),
+  cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = "cohort"),
   workFolder = file.path(outputFolder, "strategusWork"),
   resultsFolder = file.path(outputFolder, "strategusOutput"),
   minCellCount = minCellCount,
@@ -113,6 +115,24 @@ tryCatch({
   # Test database connection first
   ParallelLogger::logInfo("Testing database connection...")
   connection <- DatabaseConnector::connect(connectionDetails)
+
+  # Create schemas if they don't exist (PostgreSQL)
+  ParallelLogger::logInfo("Ensuring required schemas exist...")
+  if (connectionDetails$dbms == "postgresql") {
+    tryCatch({
+      DatabaseConnector::executeSql(connection, paste0("CREATE SCHEMA IF NOT EXISTS ", workDatabaseSchema, ";"))
+      ParallelLogger::logInfo(paste("Work schema ensured:", workDatabaseSchema))
+
+      if (workDatabaseSchema != resultsDatabaseSchema) {
+        DatabaseConnector::executeSql(connection, paste0("CREATE SCHEMA IF NOT EXISTS ", resultsDatabaseSchema, ";"))
+        ParallelLogger::logInfo(paste("Results schema ensured:", resultsDatabaseSchema))
+      }
+    }, error = function(e) {
+      ParallelLogger::logWarn(paste("Could not create schemas automatically:", e$message))
+      ParallelLogger::logWarn("You may need to create schemas manually or check permissions")
+    })
+  }
+
   DatabaseConnector::disconnect(connection)
   ParallelLogger::logInfo("Database connection test successful")
 

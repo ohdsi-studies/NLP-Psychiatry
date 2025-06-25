@@ -68,7 +68,36 @@ source("CreateAnalysisSpecification.R")
 ```
 
 ### 4. Configure Database Connection
-Edit `StrategusCodeToRun.R` with your database details
+Edit `StrategusCodeToRun.R` with your database details:
+
+```r
+# Database connection details
+connectionDetails <- DatabaseConnector::createConnectionDetails(
+  dbms = "postgresql",                    # Your database type
+  server = "your_server",                 # Your database server
+  user = "your_username",                 # Your database username
+  password = "your_password"              # Your database password
+)
+
+# Database schema settings
+cdmDatabaseSchema <- "your_cdm_schema"           # Schema containing OMOP CDM data (read-only)
+workDatabaseSchema <- "your_work_schema"         # Schema for temporary tables (must have write access)
+resultsDatabaseSchema <- "your_results_schema"   # Schema for storing results (must have write access)
+```
+
+**Important**: The `workDatabaseSchema` and `resultsDatabaseSchema` must exist in your database, or your user must have permissions to create schemas. For PostgreSQL, you can create them manually:
+
+```sql
+-- Connect to your database and run:
+CREATE SCHEMA IF NOT EXISTS your_work_schema;
+CREATE SCHEMA IF NOT EXISTS your_results_schema;
+
+-- Grant permissions to your user
+GRANT ALL PRIVILEGES ON SCHEMA your_work_schema TO your_username;
+GRANT ALL PRIVILEGES ON SCHEMA your_results_schema TO your_username;
+```
+
+The script will attempt to create schemas automatically for PostgreSQL, but manual creation is recommended for production environments.
 
 ### 5. Execute Study
 ```r
