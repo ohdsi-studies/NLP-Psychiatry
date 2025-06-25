@@ -30,17 +30,7 @@ options(
   mc.cores = parallel::detectCores(),
   
   # Set timeout for downloads
-  timeout = 300,
-  
-  # Configure database connections
-  connectionObserver = list(
-    opened = function(con, ...) {
-      message("Database connection opened")
-    },
-    closed = function(con, ...) {
-      message("Database connection closed")
-    }
-  )
+  timeout = 300
 )
 
 # Load commonly used libraries on startup
