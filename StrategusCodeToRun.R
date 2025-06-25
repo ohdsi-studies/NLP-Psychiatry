@@ -111,14 +111,8 @@ ParallelLogger::logInfo("Loaded analysis specification")
 # Create execution settings
 cohort_table_names_for_execution <- CohortGenerator::getCohortTableNames(cohortTable = "cohort")
 
-# Debug: Print execution settings
-ParallelLogger::logInfo("DEBUG: Creating execution settings...")
-ParallelLogger::logInfo(paste("DEBUG: workDatabaseSchema =", workDatabaseSchema))
-ParallelLogger::logInfo(paste("DEBUG: cdmDatabaseSchema =", cdmDatabaseSchema))
-ParallelLogger::logInfo("DEBUG: cohortTableNames for execution:")
-for (name in names(cohort_table_names_for_execution)) {
-  ParallelLogger::logInfo(paste("DEBUG:", name, "=", cohort_table_names_for_execution[[name]]))
-}
+# Create execution settings
+ParallelLogger::logInfo("Creating execution settings...")
 
 executionSettings <- Strategus::createCdmExecutionSettings(
   workDatabaseSchema = workDatabaseSchema,
@@ -131,17 +125,12 @@ executionSettings <- Strategus::createCdmExecutionSettings(
 )
 
 # Ensure cohort tables are created before execution
-ParallelLogger::logInfo("Creating cohort tables before study execution...")
+ParallelLogger::logInfo("Pre-creating cohort tables...")
 tryCatch({
-  connection <- DatabaseConnector::connect(connectionDetails)
-
   # Create all required cohort tables using CohortGenerator
   cohort_table_names <- CohortGenerator::getCohortTableNames(
     cohortTable = "cohort"
   )
-
-  # Log table creation details
-  ParallelLogger::logInfo(paste("Creating cohort tables in schema:", workDatabaseSchema))
 
   CohortGenerator::createCohortTables(
     connectionDetails = connectionDetails,
@@ -149,38 +138,12 @@ tryCatch({
     cohortTableNames = cohort_table_names
   )
 
-  # Verify tables were created successfully
-  ParallelLogger::logInfo("Verifying cohort tables were created...")
-
-  # Check tables exist (case-insensitive for PostgreSQL)
-  tables_sql <- "SELECT table_name FROM information_schema.tables WHERE LOWER(table_schema) = LOWER(?)"
-  existing_tables <- DatabaseConnector::querySql(connection, tables_sql, workDatabaseSchema)
-
-  if (nrow(existing_tables) > 0) {
-    ParallelLogger::logInfo(paste("Found", nrow(existing_tables), "tables in schema"))
-
-    # Check if all required cohort tables exist
-    required_tables <- tolower(unlist(cohort_table_names))
-    existing_table_names <- tolower(existing_tables$TABLE_NAME)
-    missing_tables <- setdiff(required_tables, existing_table_names)
-
-    if (length(missing_tables) == 0) {
-      ParallelLogger::logInfo("All required cohort tables found")
-    } else {
-      ParallelLogger::logWarn(paste("Missing tables:", paste(missing_tables, collapse = ", ")))
-    }
-  } else {
-    ParallelLogger::logWarn("No tables found in schema - this may cause issues")
-  }
-
-  ParallelLogger::logInfo("Cohort tables created successfully")
-  DatabaseConnector::disconnect(connection)
+  ParallelLogger::logInfo("Cohort tables pre-creation completed")
 
 }, error = function(e) {
   ParallelLogger::logWarn(paste("Could not pre-create cohort tables:",
                                 e$message))
-  ParallelLogger::logWarn(paste("Proceeding with execution - tables will be",
-                                "created by modules if needed"))
+  ParallelLogger::logWarn("Proceeding - CohortGenerator will create tables as needed")
 })
 
 # Execute the study with enhanced error handling
