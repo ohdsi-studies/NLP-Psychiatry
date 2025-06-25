@@ -88,22 +88,13 @@ ParallelLogger::logInfo("Loaded analysis specification")
 
 # Create execution settings
 executionSettings <- Strategus::createCdmExecutionSettings(
-  connectionDetailsReference = "nlp_psychiatry_study",
   workDatabaseSchema = workDatabaseSchema,
   cdmDatabaseSchema = cdmDatabaseSchema,
   cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = "nlp_psychiatry_cohort"),
   workFolder = file.path(outputFolder, "strategusWork"),
   resultsFolder = file.path(outputFolder, "strategusOutput"),
   minCellCount = minCellCount,
-  integerAsNumeric = TRUE,
-  integer64AsNumeric = TRUE
-)
-
-# Add connection details to keyring for secure storage
-keyringName <- "nlp_psychiatry_study"
-Strategus::storeConnectionDetails(
-  connectionDetails = connectionDetails,
-  connectionDetailsReference = keyringName
+  maxCores = maxCores
 )
 
 # Execute the study
@@ -111,7 +102,7 @@ ParallelLogger::logInfo("Executing Strategus study...")
 Strategus::execute(
   analysisSpecifications = analysisSpecifications,
   executionSettings = executionSettings,
-  executionScriptFolder = file.path(outputFolder, "strategusExecution")
+  connectionDetails = connectionDetails
 )
 
 ParallelLogger::logInfo("Study execution completed")
