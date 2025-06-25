@@ -13,13 +13,17 @@ library(CohortGenerator)
 library(ParallelLogger)
 library(magrittr)  # For %>% pipe operator
 
-# Check for CohortDiagnostics and provide helpful error message
-if (!requireNamespace("CohortDiagnostics", quietly = TRUE)) {
-  stop("CohortDiagnostics package is required but not installed.\n",
-       "Please install it by running: installOhdsiPackages()\n",
-       "Or manually: remotes::install_github('OHDSI/CohortDiagnostics')")
+# Check for required OHDSI packages and provide helpful error messages
+required_ohdsi_packages <- c("CohortDiagnostics", "CirceR")
+for (pkg in required_ohdsi_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    stop(pkg, " package is required but not installed.\n",
+         "Please install it by running: source('InstallOhdsiPackages.R')\n",
+         "Or manually: remotes::install_github('OHDSI/", pkg, "')")
+  }
 }
 library(CohortDiagnostics)
+library(CirceR)
 
 # ******************************************************************************
 # STUDY CONFIGURATION

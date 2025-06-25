@@ -89,6 +89,16 @@
       "RemoteRepo": "SqlRender",
       "RemoteRef": "main"
     },
+    "CirceR": {
+      "Package": "CirceR",
+      "Version": "1.3.4",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "OHDSI",
+      "RemoteRepo": "CirceR",
+      "RemoteRef": "main"
+    },
     "R6": {
       "Package": "R6",
       "Version": "2.5.1",

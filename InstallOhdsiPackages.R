@@ -21,13 +21,14 @@ if (!requireNamespace("remotes", quietly = TRUE)) {
 # List of required OHDSI packages
 ohdsi_packages <- c(
   "OHDSI/Strategus",
-  "OHDSI/DatabaseConnector", 
+  "OHDSI/DatabaseConnector",
   "OHDSI/PatientLevelPrediction",
   "OHDSI/CohortGenerator",
   "OHDSI/CohortDiagnostics",
   "OHDSI/FeatureExtraction",
   "OHDSI/ParallelLogger",
-  "OHDSI/SqlRender"
+  "OHDSI/SqlRender",
+  "OHDSI/CirceR"
 )
 
 # Install each package
@@ -65,9 +66,9 @@ cat("=================================================================\n")
 
 # Check if all packages are now available
 cat("\nChecking package availability...\n")
-required_packages <- c("Strategus", "DatabaseConnector", "PatientLevelPrediction", 
-                      "CohortGenerator", "CohortDiagnostics", "FeatureExtraction", 
-                      "ParallelLogger", "R6", "magrittr")
+required_packages <- c("Strategus", "DatabaseConnector", "PatientLevelPrediction",
+                      "CohortGenerator", "CohortDiagnostics", "FeatureExtraction",
+                      "ParallelLogger", "CirceR", "R6", "magrittr")
 
 all_available <- TRUE
 for (pkg in required_packages) {

@@ -56,7 +56,7 @@ options(
   # Check if required packages are available
   core_packages <- c("R6", "ParallelLogger")
   optional_packages <- c("Strategus", "DatabaseConnector", "PatientLevelPrediction",
-                        "CohortGenerator", "CohortDiagnostics", "FeatureExtraction")
+                        "CohortGenerator", "CohortDiagnostics", "FeatureExtraction", "CirceR")
 
   missing_core <- core_packages[!sapply(core_packages, requireNamespace, quietly = TRUE)]
   missing_optional <- optional_packages[!sapply(optional_packages, requireNamespace, quietly = TRUE)]

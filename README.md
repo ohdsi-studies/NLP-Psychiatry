@@ -75,7 +75,7 @@ Edit `StrategusCodeToRun.R` with your database details
 source("StrategusCodeToRun.R")
 ```
 
-**Note**: If you get errors about missing packages like `CohortDiagnostics`, run the installation script first: `source("InstallOhdsiPackages.R")`
+**Note**: If you get errors about missing packages like `CohortDiagnostics` or `CirceR`, run the installation script first: `source("InstallOhdsiPackages.R")`
 
 ## Documentation
 
