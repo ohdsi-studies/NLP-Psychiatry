@@ -43,7 +43,7 @@ BipolarMisclassificationModule <- R6::R6Class(
       # Validate inputs
       private$.validateInputs(targetCohortId, outcomeCohortId, minCellCount)
       
-      # Create module specifications
+      # Create module specifications using Strategus format
       specifications <- list(
         module = private$.moduleName,
         version = private$.version,
@@ -62,7 +62,10 @@ BipolarMisclassificationModule <- R6::R6Class(
           covariateSettings = private$.getCovariateSettings()
         )
       )
-      
+
+      # Set the proper class for Strategus
+      class(specifications) <- c("ModuleSpecifications", "list")
+
       return(specifications)
     },
     

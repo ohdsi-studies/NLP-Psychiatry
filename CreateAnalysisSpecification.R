@@ -11,6 +11,7 @@
 library(Strategus)
 library(CohortGenerator)
 library(ParallelLogger)
+library(magrittr)  # For %>% pipe operator
 
 # ******************************************************************************
 # STUDY CONFIGURATION
@@ -98,26 +99,26 @@ analysisSpecifications <- analysisSpecifications %>%
   Strategus::addModuleSpecifications(bipolarModuleSpecifications)
 
 # ============================================================================
-# COHORT DIAGNOSTICS MODULE (Optional)
+# COHORT DIAGNOSTICS MODULE (Optional - commented out due to missing package)
 # ============================================================================
-ParallelLogger::logInfo("Setting up CohortDiagnostics module")
-
-cdModule <- CohortDiagnosticsModule$new()
-cohortDiagnosticsModuleSpecifications <- cdModule$createModuleSpecifications(
-  runInclusionStatistics = TRUE,
-  runIncludedSourceConcepts = TRUE,
-  runOrphanConcepts = TRUE,
-  runTimeSeries = FALSE,
-  runVisitContext = TRUE,
-  runBreakdownIndexEvents = TRUE,
-  runIncidenceRate = TRUE,
-  runCohortRelationship = TRUE,
-  runTemporalCohortCharacterization = TRUE
-)
-
-# Add to analysis specification
-analysisSpecifications <- analysisSpecifications %>%
-  Strategus::addModuleSpecifications(cohortDiagnosticsModuleSpecifications)
+# ParallelLogger::logInfo("Setting up CohortDiagnostics module")
+#
+# cdModule <- CohortDiagnosticsModule$new()
+# cohortDiagnosticsModuleSpecifications <- cdModule$createModuleSpecifications(
+#   runInclusionStatistics = TRUE,
+#   runIncludedSourceConcepts = TRUE,
+#   runOrphanConcepts = TRUE,
+#   runTimeSeries = FALSE,
+#   runVisitContext = TRUE,
+#   runBreakdownIndexEvents = TRUE,
+#   runIncidenceRate = TRUE,
+#   runCohortRelationship = TRUE,
+#   runTemporalCohortCharacterization = TRUE
+# )
+#
+# # Add to analysis specification
+# analysisSpecifications <- analysisSpecifications %>%
+#   Strategus::addModuleSpecifications(cohortDiagnosticsModuleSpecifications)
 
 # ******************************************************************************
 # SAVE ANALYSIS SPECIFICATION
