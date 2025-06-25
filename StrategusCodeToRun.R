@@ -48,6 +48,17 @@ cdmDatabaseSchema <- "your_cdm_schema"           # Schema containing OMOP CDM da
 workDatabaseSchema <- "your_work_schema"         # Schema for temporary tables (must have write access)
 resultsDatabaseSchema <- "your_results_schema"   # Schema for storing results (must have write access)
 
+# PostgreSQL case sensitivity fix: ensure schema names are lowercase
+# PostgreSQL stores unquoted identifiers in lowercase
+if (connectionDetails$dbms == "postgresql") {
+  workDatabaseSchema <- tolower(workDatabaseSchema)
+  resultsDatabaseSchema <- tolower(resultsDatabaseSchema)
+  cdmDatabaseSchema <- tolower(cdmDatabaseSchema)
+  ParallelLogger::logInfo(paste("PostgreSQL detected - using lowercase schema names"))
+  ParallelLogger::logInfo(paste("Work schema:", workDatabaseSchema))
+  ParallelLogger::logInfo(paste("CDM schema:", cdmDatabaseSchema))
+}
+
 # Study execution settings
 outputFolder <- "./StrategusOutput"              # Local folder for study results
 databaseId <- "YourDatabase"                     # Unique identifier for your database
@@ -129,13 +140,8 @@ tryCatch({
     cohortTable = "cohort"
   )
 
-  # Debug: Print table names and schema
-  ParallelLogger::logInfo(paste("DEBUG: Work database schema:", workDatabaseSchema))
-  ParallelLogger::logInfo(paste("DEBUG: Cohort table names:",
-                                paste(names(cohort_table_names), collapse = ", ")))
-  for (name in names(cohort_table_names)) {
-    ParallelLogger::logInfo(paste("DEBUG:", name, "=", cohort_table_names[[name]]))
-  }
+  # Log table creation details
+  ParallelLogger::logInfo(paste("Creating cohort tables in schema:", workDatabaseSchema))
 
   CohortGenerator::createCohortTables(
     connectionDetails = connectionDetails,
@@ -143,32 +149,28 @@ tryCatch({
     cohortTableNames = cohort_table_names
   )
 
-  # Debug: Verify tables exist after creation
-  ParallelLogger::logInfo("DEBUG: Verifying table existence after creation...")
+  # Verify tables were created successfully
+  ParallelLogger::logInfo("Verifying cohort tables were created...")
 
-  # Check what tables actually exist in the schema
-  schema_tables_sql <- paste0("SELECT table_name FROM information_schema.tables WHERE ",
-                             "table_schema = '", workDatabaseSchema, "'")
-  existing_tables <- DatabaseConnector::querySql(connection, schema_tables_sql)
-  ParallelLogger::logInfo(paste("DEBUG: All tables in schema:",
-                               paste(existing_tables$TABLE_NAME, collapse = ", ")))
+  # Check tables exist (case-insensitive for PostgreSQL)
+  tables_sql <- "SELECT table_name FROM information_schema.tables WHERE LOWER(table_schema) = LOWER(?)"
+  existing_tables <- DatabaseConnector::querySql(connection, tables_sql, workDatabaseSchema)
 
-  # Check each expected table
-  for (name in names(cohort_table_names)) {
-    table_name <- cohort_table_names[[name]]
-    sql <- paste0("SELECT COUNT(*) FROM information_schema.tables WHERE ",
-                  "table_schema = '", workDatabaseSchema, "' AND ",
-                  "table_name = '", table_name, "'")
-    result <- DatabaseConnector::querySql(connection, sql)
-    ParallelLogger::logInfo(paste("DEBUG: Table", table_name, "exists:", result[1, 1] > 0))
+  if (nrow(existing_tables) > 0) {
+    ParallelLogger::logInfo(paste("Found", nrow(existing_tables), "tables in schema"))
 
-    # Also try checking if table exists with different case
-    sql_lower <- paste0("SELECT COUNT(*) FROM information_schema.tables WHERE ",
-                       "LOWER(table_schema) = LOWER('", workDatabaseSchema, "') AND ",
-                       "LOWER(table_name) = LOWER('", table_name, "')")
-    result_lower <- DatabaseConnector::querySql(connection, sql_lower)
-    ParallelLogger::logInfo(paste("DEBUG: Table", table_name, "exists (case-insensitive):",
-                                 result_lower[1, 1] > 0))
+    # Check if all required cohort tables exist
+    required_tables <- tolower(unlist(cohort_table_names))
+    existing_table_names <- tolower(existing_tables$TABLE_NAME)
+    missing_tables <- setdiff(required_tables, existing_table_names)
+
+    if (length(missing_tables) == 0) {
+      ParallelLogger::logInfo("All required cohort tables found")
+    } else {
+      ParallelLogger::logWarn(paste("Missing tables:", paste(missing_tables, collapse = ", ")))
+    }
+  } else {
+    ParallelLogger::logWarn("No tables found in schema - this may cause issues")
   }
 
   ParallelLogger::logInfo("Cohort tables created successfully")
