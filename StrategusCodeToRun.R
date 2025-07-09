@@ -188,18 +188,33 @@ tryCatch({
   ParallelLogger::logInfo("Strategus execution completed successfully")
 
 }, error = function(e) {
-  ParallelLogger::logError(paste("Strategus execution failed:", e$message))
+  # Safely handle error messages that might contain quotes or special characters
+  error_message <- tryCatch({
+    as.character(e$message)
+  }, error = function(err) {
+    "Error message could not be retrieved"
+  })
+
+  ParallelLogger::logError(paste("Strategus execution failed:", error_message))
   ParallelLogger::logError("Full error details:")
-  ParallelLogger::logError(paste(capture.output(traceback()), collapse = "\n"))
+
+  # Safely capture traceback
+  traceback_info <- tryCatch({
+    paste(capture.output(traceback()), collapse = "\n")
+  }, error = function(err) {
+    "Traceback could not be captured"
+  })
+
+  ParallelLogger::logError(traceback_info)
 
   # Provide specific guidance for common errors
-  if (grepl("JDBC", e$message, ignore.case = TRUE)) {
+  if (grepl("JDBC", error_message, ignore.case = TRUE)) {
     ParallelLogger::logError("JDBC driver issue detected. Try:")
     ParallelLogger::logError("1. DatabaseConnector::downloadJdbcDrivers('postgresql')")
     ParallelLogger::logError("2. Check database connection parameters")
   }
 
-  if (grepl("metadata", e$message, ignore.case = TRUE)) {
+  if (grepl("metadata", error_message, ignore.case = TRUE)) {
     ParallelLogger::logError("CDM metadata collection failed. Check:")
     ParallelLogger::logError("1. Database connection permissions")
     ParallelLogger::logError("2. CDM schema access")

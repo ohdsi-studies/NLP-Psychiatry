@@ -162,7 +162,7 @@ BipolarMisclassificationModule <- R6::R6Class(
           'Anxiety drugs and Anxiety days before: -9999 days after: 0',
           'Mild depression days before: -9999 days after: 0',
           'Severe depression days before: -9999 days after: 0',
-          'MDD with pyschosis days before: -9999 days after: 0',
+          'MDD with psychosis days before: -9999 days after: 0',
           'Substance use disorder days before: -9999 days after: 0'
         ),
         covariateId = c(
