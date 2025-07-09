@@ -70,16 +70,46 @@ BipolarMisclassificationModule <- R6::R6Class(
     },
     
     #' @description Execute the module
-    #' @param jobContext The job context from Strategus
-    #' @param settings The module settings
-    #' @param keyringName The keyring name for database connections
-    execute = function(jobContext, settings, keyringName) {
-      
+    #' @param connectionDetails Database connection details (Strategus format)
+    #' @param analysisSpecifications Analysis specifications (Strategus format)
+    #' @param executionSettings Execution settings (Strategus format)
+    execute = function(connectionDetails, analysisSpecifications, executionSettings) {
+
       # Set up logging
       ParallelLogger::logInfo("Starting BipolarMisclassificationModule execution")
-      
-      # Get database connection
-      connectionDetails <- keyring::key_get(keyringName)
+
+      # Convert Strategus parameters to our internal format
+      # Create a jobContext-like object for compatibility with existing code
+      jobContext <- list(
+        moduleExecutionSettings = executionSettings
+      )
+
+      # Extract settings - try multiple approaches for robustness
+      settings <- NULL
+      if (is.list(analysisSpecifications)) {
+        # Try to find our module's settings
+        for (i in seq_along(analysisSpecifications)) {
+          if (is.list(analysisSpecifications[[i]]) &&
+              !is.null(analysisSpecifications[[i]]$module) &&
+              analysisSpecifications[[i]]$module == "BipolarMisclassificationModule") {
+            settings <- analysisSpecifications[[i]]$settings
+            break
+          }
+        }
+      }
+
+      # Fallback: use default settings if not found
+      if (is.null(settings)) {
+        ParallelLogger::logWarn("Could not find module settings, using defaults")
+        settings <- list(
+          targetCohortId = 12292,
+          outcomeCohortId = 7746,
+          generateStats = TRUE,
+          runValidation = TRUE,
+          minCellCount = 5,
+          restrictToAdults = FALSE
+        )
+      }
       
       # Execute the analysis
       tryCatch({
