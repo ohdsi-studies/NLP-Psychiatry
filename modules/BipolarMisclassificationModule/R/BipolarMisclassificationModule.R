@@ -70,32 +70,32 @@ BipolarMisclassificationModule <- R6::R6Class(
     },
     
     #' @description Execute the module
-    #' @param jobContext The job context from Strategus
-    #' @param settings The module settings
-    #' @param keyringName The keyring name for database connections
-    execute = function(jobContext, settings, keyringName) {
-      
+    #' @param connectionDetails Database connection details
+    #' @param analysisSpecifications Analysis specifications from Strategus
+    #' @param executionSettings Execution settings from Strategus
+    execute = function(connectionDetails, analysisSpecifications, executionSettings) {
+
       # Set up logging
       ParallelLogger::logInfo("Starting BipolarMisclassificationModule execution")
-      
-      # Get database connection
-      connectionDetails <- keyring::key_get(keyringName)
+
+      # Extract settings from analysis specifications
+      settings <- analysisSpecifications$moduleSpecifications[[1]]$settings
       
       # Execute the analysis
       tryCatch({
         
         # Validate cohorts exist (created by CohortGenerator module)
         if (settings$generateStats) {
-          private$.validateCohorts(jobContext, settings, connectionDetails)
+          private$.validateCohorts(executionSettings, settings, connectionDetails)
         }
-        
+
         # Run validation if requested
         if (settings$runValidation) {
-          private$.runValidation(jobContext, settings, connectionDetails)
+          private$.runValidation(executionSettings, settings, connectionDetails)
         }
-        
+
         # Package results
-        private$.packageResults(jobContext, settings)
+        private$.packageResults(executionSettings, settings)
         
         ParallelLogger::logInfo("BipolarMisclassificationModule execution completed successfully")
         
@@ -188,7 +188,7 @@ BipolarMisclassificationModule <- R6::R6Class(
     },
 
     # Validate cohorts exist for the study
-    .validateCohorts = function(jobContext, settings, connectionDetails) {
+    .validateCohorts = function(executionSettings, settings, connectionDetails) {
       ParallelLogger::logInfo("Validating cohorts for BipolarMisclassificationModule")
 
       # Check that required cohorts exist in the cohort table
@@ -199,8 +199,8 @@ BipolarMisclassificationModule <- R6::R6Class(
         # Check if the main cohort table exists and has data
         sql <- "SELECT COUNT(*) as cohort_count FROM @cohort_database_schema.@cohort_table"
         sql <- SqlRender::render(sql,
-                                cohort_database_schema = jobContext$moduleExecutionSettings$workDatabaseSchema,
-                                cohort_table = jobContext$moduleExecutionSettings$cohortTableNames$cohortTable)
+                                cohort_database_schema = executionSettings$workDatabaseSchema,
+                                cohort_table = executionSettings$cohortTableNames$cohortTable)
         sql <- SqlRender::translate(sql, targetDialect = connectionDetails$dbms)
 
         result <- DatabaseConnector::querySql(connection, sql)
@@ -220,7 +220,7 @@ BipolarMisclassificationModule <- R6::R6Class(
     },
 
     # Run the validation analysis
-    .runValidation = function(jobContext, settings, connectionDetails) {
+    .runValidation = function(executionSettings, settings, connectionDetails) {
       ParallelLogger::logInfo("Running bipolar misclassification validation")
 
       # This will implement the core validation logic from the original study
@@ -261,7 +261,7 @@ BipolarMisclassificationModule <- R6::R6Class(
     },
 
     # Package results for sharing
-    .packageResults = function(jobContext, settings) {
+    .packageResults = function(executionSettings, settings) {
       ParallelLogger::logInfo("Packaging results for BipolarMisclassificationModule")
 
       # Apply minimum cell count restrictions and package results
