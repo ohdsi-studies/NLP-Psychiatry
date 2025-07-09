@@ -19,6 +19,10 @@ library(Strategus)
 library(DatabaseConnector)
 library(ParallelLogger)
 
+# Load custom modules required for this study
+ParallelLogger::logInfo("Loading custom study modules...")
+source("modules/BipolarMisclassificationModule/R/LoadModule.R")
+
 # Download and configure JDBC drivers for PostgreSQL
 tryCatch({
   DatabaseConnector::downloadJdbcDrivers("postgresql")
