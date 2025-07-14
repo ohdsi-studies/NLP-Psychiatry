@@ -10,6 +10,36 @@
 # Define %||% operator (null coalescing)
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+# Missing function from original study - createStudyPopulationSettings
+# This appears to be a wrapper that was used in the original but not defined
+# Based on usage patterns, it creates the settings structure for PatientLevelPrediction
+createStudyPopulationSettings <- function(removeSubjectsWithPriorOutcome = TRUE,
+                                         requireTimeAtRisk = TRUE,
+                                         minTimeAtRisk = 364,
+                                         riskWindowStart = 1,
+                                         riskWindowEnd = 365) {
+  # This function replicates the missing createStudyPopulationSettings from original study
+  # Based on the parameters used in lines 82-85 and 173-176 of main.R
+
+  settings <- list(
+    removeSubjectsWithPriorOutcome = removeSubjectsWithPriorOutcome,
+    requireTimeAtRisk = requireTimeAtRisk,
+    minTimeAtRisk = minTimeAtRisk,
+    riskWindowStart = riskWindowStart,
+    riskWindowEnd = riskWindowEnd,
+    binary = TRUE,
+    includeAllOutcomes = TRUE,
+    firstExposureOnly = FALSE,
+    washoutPeriod = 0,
+    priorOutcomeLookback = 99999,
+    addExposureDaysToStart = FALSE,
+    addExposureDaysToEnd = FALSE
+  )
+
+  class(settings) <- "populationSettings"
+  return(settings)
+}
+
 # Get bipolar prediction data (adapted from original getBipolarData function)
 .getBipolarData <- function(connectionDetails,
                            cdmDatabaseSchema,

@@ -270,8 +270,8 @@ BipolarMisclassificationModule <- R6::R6Class(
         outcomeId = settings$outcomeCohortId
       )
 
-      # Create study population
-      populationSettings <- PatientLevelPrediction::createStudyPopulationSettings(
+      # Create study population (using original function)
+      populationSettings <- createStudyPopulationSettings(
         removeSubjectsWithPriorOutcome = TRUE,
         requireTimeAtRisk = TRUE,
         minTimeAtRisk = 364,
@@ -297,6 +297,32 @@ BipolarMisclassificationModule <- R6::R6Class(
         population = population
       )
 
+      # CRITICAL: Post-processing steps from original lines 125-151
+      # Set metadata (original lines 125-130)
+      attr(result$prediction, "metaData") <- list(
+        modelType = "binary",
+        predictionType = "binary",
+        evaluationColumn = "value"
+      )
+
+      # Filter invalid predictions (original lines 134-137)
+      result$prediction <- result$prediction[
+        !is.na(result$prediction$outcomeCount) &
+        !is.na(result$prediction$value),
+      ]
+
+      # CRITICAL: Convert score to probability (original lines 140-141)
+      result$prediction$value <- 1 / (1 + exp(-result$prediction$value))
+
+      # Add preferenceScore (original lines 143-144)
+      result$prediction$preferenceScore <- result$prediction$value
+
+      # Ensure evaluation column exists (original lines 147-151)
+      evalColumn <- attr(result$prediction, "metaData")$evaluationColumn
+      if (!evalColumn %in% colnames(result$prediction)) {
+        result$prediction[[evalColumn]] <- result$prediction$value
+      }
+
       # Add required evaluationType column (original line 154)
       result$prediction$evaluationType <- "Test"
 
@@ -319,13 +345,69 @@ BipolarMisclassificationModule <- R6::R6Class(
 
       # Create second population for survival analysis (original lines 173-176)
       # 10-year follow-up for survival analysis
-      populationSettingsSurvival <- PatientLevelPrediction::createStudyPopulationSettings(
+      populationSettingsSurvival <- createStudyPopulationSettings(
         removeSubjectsWithPriorOutcome = TRUE,
         requireTimeAtRisk = TRUE,
         minTimeAtRisk = 364,
         riskWindowStart = 1,
         riskWindowEnd = 10*365  # 10 years as in original
       )
+
+      # Create 10-year population for spline analysis (original lines 178-181)
+      pop10 <- PatientLevelPrediction::createStudyPopulation(
+        plpData = plpData,
+        outcomeId = 7746,
+        populationSettings = populationSettingsSurvival
+      )
+      ParallelLogger::logInfo("pop10 created")
+
+      # Merge populations for spline analysis (original lines 184-186)
+      pop10 <- merge(
+        result$prediction[, !colnames(result$prediction) %in% c('survivalTime','outcomeCount')],
+        pop10[, colnames(pop10) %in% c('rowId','survivalTime','outcomeCount')],
+        by = 'rowId', all.x = TRUE
+      )
+
+      # Survival spline analysis (original lines 188-209)
+      if (requireNamespace("survival", quietly = TRUE) && nrow(pop10) > 0) {
+        tryCatch({
+          # Cox proportional hazards model with spline (original lines 188-189)
+          mfit <- survival::coxph(
+            survival::Surv(survivalTime, outcomeCount) ~ survival::pspline(value, df=4),
+            data = pop10
+          )
+
+          # Spline plotting (original lines 192-209)
+          ptemp <- stats::termplot(mfit, se = TRUE, plot = FALSE)
+          riskterm <- ptemp$value
+          center <- riskterm$y[which.min(abs(riskterm$x - 0))]
+          ytemp <- riskterm$y + outer(riskterm$se, c(0, -1.96, 1.96), '*')
+          sdata <- data.frame(x = riskterm$x, y = exp(ytemp - center))
+
+          # Create spline plot
+          if (requireNamespace("ggplot2", quietly = TRUE)) {
+            splinePlot <- ggplot2::ggplot(sdata, ggplot2::aes(x, y.1)) +
+              ggplot2::geom_line(data = sdata) +
+              ggplot2::geom_ribbon(data = sdata, ggplot2::aes(ymin = y.2, ymax = y.3), alpha = 0.3) +
+              ggplot2::xlab("Risk Score") +
+              ggplot2::ylab("Relative outcome rate") +
+              ggplot2::scale_x_continuous(breaks = c(-1:6)*5) +
+              ggplot2::coord_cartesian(ylim = c(0, max(ceiling(sdata$y.1))*1.2))
+
+            result$spline <- list(mfit = mfit, splinePlot = splinePlot)
+          } else {
+            result$spline <- list(mfit = mfit, splinePlot = NULL)
+            ParallelLogger::logWarn("ggplot2 not available - spline plot not created")
+          }
+
+        }, error = function(e) {
+          ParallelLogger::logWarn(paste("Spline analysis failed:", e$message))
+          result$spline <- NULL
+        })
+      } else {
+        ParallelLogger::logWarn("Survival analysis skipped - missing package or no data")
+        result$spline <- NULL
+      }
 
       # Add original study's additional analyses
       private$.loadHelperFunctions()
