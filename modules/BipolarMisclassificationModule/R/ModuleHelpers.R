@@ -7,6 +7,9 @@
 #
 # ******************************************************************************
 
+# Define %||% operator (null coalescing)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 # Get bipolar prediction data (adapted from original getBipolarData function)
 .getBipolarData <- function(connectionDetails,
                            cdmDatabaseSchema,
@@ -223,16 +226,11 @@ getCohortCovariateData <- function(connection,
     index = NULL,
     trainCVAuc = NULL,
     modelSettings = list(model = 'score', modelParameters = NULL),
-    metaData = list(
-      modelType = "binary",
-      predictionType = "binary",
-      outcomeId = settings$outcomeCohortId,
-      targetId = settings$targetCohortId
-    ),
+    metaData = NULL,  # Match original (NULL, not list)
     populationSettings = NULL,
     trainingTime = NULL,
     varImp = NULL,
-    dense = TRUE,
+    dense = TRUE,  # Match original
     targetId = settings$targetCohortId,
     outcomeId = settings$outcomeCohortId,
     covariateMap = NULL
@@ -241,6 +239,25 @@ getCohortCovariateData <- function(connection,
   class(plpModel) <- "plpModel"
   attr(plpModel, "predictionFunction") <- "predictBipolar"
   attr(plpModel, "saveType") <- "RtoJson"
+
+  # Apply model augmentation (from original line 113)
+  plpModel <- augmentManualPlpModel(plpModel)
+
+  return(plpModel)
+}
+
+# Augment manual PLP model (from original study)
+augmentManualPlpModel <- function(plpModel) {
+  # This function augments the manual model with additional metadata
+  # Implementation based on original study requirements
+
+  # Add any missing metadata or structure required by PatientLevelPrediction
+  if (is.null(plpModel$metaData)) {
+    plpModel$metaData <- list(
+      modelType = "binary",
+      predictionType = "binary"
+    )
+  }
 
   return(plpModel)
 }

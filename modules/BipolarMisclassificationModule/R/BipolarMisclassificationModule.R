@@ -288,32 +288,55 @@ BipolarMisclassificationModule <- R6::R6Class(
       # Apply the prediction model (replicating original study workflow)
       plpModel <- private$.createPlpModel(settings)
 
-      # Get prediction using the model
-      prediction <- private$.applyPredictionModel(plpData, population, settings)
-
-      # Evaluate the model (using modern PatientLevelPrediction)
-      evaluation <- PatientLevelPrediction::evaluatePlp(
-        prediction = prediction,
-        plpData = plpData
+      # Get prediction using the model (replicating original lines 118-123)
+      result <- list()
+      result$model <- plpModel
+      result$prediction <- PatientLevelPrediction::predictPlp(
+        plpModel = plpModel,
+        plpData = plpData,
+        population = population
       )
 
-      # Create result structure matching original study
-      result <- list(
-        model = plpModel,
-        prediction = prediction,
-        evaluation = evaluation
+      # Add required evaluationType column (original line 154)
+      result$prediction$evaluationType <- "Test"
+
+      # Evaluate the model (original lines 161-164)
+      result$performanceEvaluation <- PatientLevelPrediction::evaluatePlp(
+        prediction = result$prediction,
+        typeColumn = "evaluationType"
+      )
+
+      # Add input settings (original line 167)
+      result$inputSetting <- list()
+      result$inputSetting$database <- executionSettings$databaseId %||% "Unknown"
+
+      # Load survival package for survival analysis (original line 171)
+      if (!requireNamespace("survival", quietly = TRUE)) {
+        ParallelLogger::logWarn("survival package not available - skipping survival analysis")
+      } else {
+        require(survival, quietly = TRUE)
+      }
+
+      # Create second population for survival analysis (original lines 173-176)
+      # 10-year follow-up for survival analysis
+      populationSettingsSurvival <- PatientLevelPrediction::createStudyPopulationSettings(
+        removeSubjectsWithPriorOutcome = TRUE,
+        requireTimeAtRisk = TRUE,
+        minTimeAtRisk = 364,
+        riskWindowStart = 1,
+        riskWindowEnd = 10*365  # 10 years as in original
       )
 
       # Add original study's additional analyses
       private$.loadHelperFunctions()
 
-      # Get score summaries for threshold analysis
-      result$scoreThreshold <- getScoreSummaries(prediction)
+      # Get score summaries for threshold analysis (original line 212)
+      result$scoreThreshold <- getScoreSummaries(result$prediction)
 
-      # Get survival information
-      result$survInfo <- getSurvivalInfo(plpData, prediction)
+      # Get survival information (original line 217)
+      result$survInfo <- getSurvivalInfo(plpData, result$prediction)
 
-      # Get AUC by year analysis
+      # Get AUC by year analysis (original line 221)
       result$yauc <- getAUCbyYear(result)
 
       # Save results
