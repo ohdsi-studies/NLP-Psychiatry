@@ -94,6 +94,91 @@
   return(covariateSettings)
 }
 
+# Get cohort covariate data (custom covariate function)
+getCohortCovariateData <- function(connectionDetails,
+                                   oracleTempSchema = NULL,
+                                   cdmDatabaseSchema,
+                                   cohortTable = "#cohort_person",
+                                   cohortId = -1,
+                                   cdmVersion = "5",
+                                   rowIdField = "subject_id",
+                                   covariateSettings,
+                                   aggregated = FALSE) {
+
+  # Extract settings
+  covariateName <- covariateSettings$covariateName
+  covariateId <- covariateSettings$covariateId
+  cohortDatabaseSchema <- covariateSettings$cohortDatabaseSchema
+  targetCohortTable <- covariateSettings$cohortTable
+  targetId <- covariateSettings$targetId
+  startDay <- covariateSettings$startDay
+  endDay <- covariateSettings$endDay
+  count <- covariateSettings$count
+  analysisId <- covariateSettings$analysisId
+
+  # Create SQL to get covariate data
+  sql <- "SELECT DISTINCT
+            c1.@row_id_field AS row_id,
+            @covariate_id AS covariate_id,
+            {@count} ? {1} : {DATEDIFF(DAY, c2.cohort_start_date, c1.cohort_start_date)} AS covariate_value
+          FROM @cohort_table c1
+          INNER JOIN @cohort_database_schema.@target_cohort_table c2
+            ON c1.subject_id = c2.subject_id
+          WHERE c1.cohort_definition_id = @cohort_id
+            AND c2.cohort_definition_id = @target_id
+            AND c2.cohort_start_date >= DATEADD(DAY, @start_day, c1.cohort_start_date)
+            AND c2.cohort_start_date <= DATEADD(DAY, @end_day, c1.cohort_start_date)"
+
+  sql <- SqlRender::render(sql,
+                          row_id_field = rowIdField,
+                          covariate_id = covariateId,
+                          count = count,
+                          cohort_table = cohortTable,
+                          cohort_database_schema = cohortDatabaseSchema,
+                          target_cohort_table = targetCohortTable,
+                          cohort_id = cohortId,
+                          target_id = targetId,
+                          start_day = startDay,
+                          end_day = endDay)
+
+  sql <- SqlRender::translate(sql, targetDialect = connectionDetails$dbms,
+                             oracleTempSchema = oracleTempSchema)
+
+  # Execute query
+  connection <- DatabaseConnector::connect(connectionDetails)
+  covariateData <- DatabaseConnector::querySql(connection, sql, snakeCaseToCamelCase = TRUE)
+  DatabaseConnector::disconnect(connection)
+
+  # Create covariate reference
+  covariateRef <- data.frame(
+    covariateId = covariateId,
+    covariateName = covariateName,
+    analysisId = analysisId,
+    conceptId = 0
+  )
+
+  # Create analysis reference
+  analysisRef <- data.frame(
+    analysisId = analysisId,
+    analysisName = "Custom cohort covariate",
+    domainId = "Cohort",
+    startDay = startDay,
+    endDay = endDay,
+    isBinary = ifelse(count, "Y", "N"),
+    missingMeansZero = "Y"
+  )
+
+  # Return in FeatureExtraction format
+  result <- list(
+    covariates = covariateData,
+    covariateRef = covariateRef,
+    analysisRef = analysisRef
+  )
+
+  class(result) <- "CovariateData"
+  return(result)
+}
+
 # Apply the bipolar prediction model (adapted from original predictBipolar function)
 .applyPredictionModel <- function(plpData, population, settings) {
   
