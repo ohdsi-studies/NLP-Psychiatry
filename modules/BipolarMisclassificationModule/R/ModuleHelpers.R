@@ -200,28 +200,25 @@ getCohortCovariateData <- function(connection,
   # Merge with population
   prediction <- merge(population, prediction, by = "rowId", all.x = TRUE)
   prediction$value[is.na(prediction$value)] <- 0
-  
-  # Convert score to probability
-  prediction$value <- 1 / (1 + exp(-prediction$value))
-  
-  # Add preference score
-  prediction$preferenceScore <- prediction$value
-  
-  # Set metadata
+
+  # Set metadata (exactly as in original predictBipolar function)
   attr(prediction, "metaData") <- list(
-    predictionType = 'binary', 
-    modelType = 'binary', 
+    predictionType = 'binary',
+    modelType = 'binary',
     evaluationColumn = "value"
   )
-  
+
   return(prediction)
 }
 
-# Create PLP model object (adapted from original study)
+# Create PLP model object (exactly replicating original study)
 .createPlpModel <- function(settings) {
+  # Get model coefficients (from original getModel function)
+  modelCoefficients <- settings$modelCoefficients
+
   plpModel <- list(
-    model = settings$modelCoefficients,
-    analysisId = 'BipolarMisclassification',
+    model = modelCoefficients,
+    analysisId = 'Bipolar',  # Match original analysisId
     hyperParamSearch = NULL,
     index = NULL,
     trainCVAuc = NULL,
@@ -240,11 +237,11 @@ getCohortCovariateData <- function(connection,
     outcomeId = settings$outcomeCohortId,
     covariateMap = NULL
   )
-  
+
   class(plpModel) <- "plpModel"
   attr(plpModel, "predictionFunction") <- "predictBipolar"
   attr(plpModel, "saveType") <- "RtoJson"
-  
+
   return(plpModel)
 }
 
@@ -274,6 +271,84 @@ getCohortCovariateData <- function(connection,
   .exportResultsToCsv(result, evaluation, resultsDir, settings)
   
   ParallelLogger::logInfo("Validation results saved")
+}
+
+# Get score summaries for threshold analysis (from original study)
+getScoreSummaries <- function(prediction) {
+  # Added later - clamp values to avoid Inf/NaN (from original)
+  prediction$value <- pmin(pmax(prediction$value, 1e-15), 1 - 1e-15)
+
+  getInfo <- function(thres, pred) {
+    TP = sum(pred$outcomeCount[pred$value >= thres])
+    P = sum(pred$outcomeCount > 0)
+    pN = sum(pred$value >= thres)
+    N <- length(pred$value)
+    thresN <- sum(pred$value == thres)
+    thresO <- sum(pred$outcomeCount[pred$value == thres])
+    return(c(thres = thres, N = thresN, O = thresO, popN = pN/N,
+             sensitivity = TP/P, PPV = TP/pN))
+  }
+
+  res <- do.call(rbind, lapply(unique(prediction$value), function(x) getInfo(x, prediction)))
+  return(res)
+}
+
+# Get survival information (from original study)
+getSurvivalInfo <- function(plpData, prediction) {
+  # Extract population from plpData
+  population <- plpData$population
+
+  data <- merge(population, prediction[, c('rowId','value')], by='rowId')
+  data$daysToEvent[is.na(data$daysToEvent)] <- data$survivalTime[is.na(data$daysToEvent)]
+
+  getSurv <- function(dayL, dayU, data) {
+    return(c(dayL = dayL,
+             dayU = dayU,
+             remainingDayL = sum(data$daysToEvent >= dayL),
+             lost = sum(data$outcomeCount[data$daysToEvent < dayU & data$daysToEvent >= dayL] == 0),
+             outcome = sum(data$outcomeCount[data$daysToEvent < dayU & data$daysToEvent >= dayL])))
+  }
+
+  # Time periods from original study
+  periods <- list(
+    c(0, 30), c(30, 60), c(60, 90), c(90, 120), c(120, 150), c(150, 180),
+    c(180, 210), c(210, 240), c(240, 270), c(270, 300), c(300, 330), c(330, 365)
+  )
+
+  survInfo <- do.call(rbind, lapply(periods, function(p) getSurv(p[1], p[2], data)))
+  return(as.data.frame(survInfo))
+}
+
+# Get AUC by year analysis (from original study)
+getAUCbyYear <- function(result) {
+  prediction <- result$prediction
+
+  # Extract year from index date
+  prediction$indexYear <- as.numeric(format(as.Date(prediction$cohortStartDate), "%Y"))
+
+  # Calculate AUC for each year
+  years <- unique(prediction$indexYear)
+  aucByYear <- data.frame()
+
+  for(year in years) {
+    yearData <- prediction[prediction$indexYear == year, ]
+    if(nrow(yearData) > 10 && sum(yearData$outcomeCount) > 0) {
+      # Calculate AUC using ROCR or similar
+      tryCatch({
+        auc <- PatientLevelPrediction::computeAuc(yearData)
+        aucByYear <- rbind(aucByYear, data.frame(
+          year = year,
+          auc = auc,
+          n = nrow(yearData),
+          events = sum(yearData$outcomeCount)
+        ))
+      }, error = function(e) {
+        ParallelLogger::logWarn(paste("Could not calculate AUC for year", year, ":", e$message))
+      })
+    }
+  }
+
+  return(aucByYear)
 }
 
 # Export results to CSV format for Strategus

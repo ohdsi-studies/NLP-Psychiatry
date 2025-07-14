@@ -110,6 +110,9 @@ BipolarMisclassificationModule <- R6::R6Class(
           restrictToAdults = FALSE
         )
       }
+
+      # Add model coefficients to settings (from original study)
+      settings$modelCoefficients <- private$.getModelCoefficients()
       
       # Execute the analysis
       tryCatch({
@@ -281,8 +284,36 @@ BipolarMisclassificationModule <- R6::R6Class(
         populationSettings = populationSettings
       )
 
-      # Apply the prediction model
-      result <- private$.applyPredictionModel(plpData, population, settings)
+      # Apply the prediction model (replicating original study workflow)
+      plpModel <- private$.createPlpModel(settings)
+
+      # Get prediction using the model
+      prediction <- private$.applyPredictionModel(plpData, population, settings)
+
+      # Evaluate the model (using modern PatientLevelPrediction)
+      evaluation <- PatientLevelPrediction::evaluatePlp(
+        prediction = prediction,
+        plpData = plpData
+      )
+
+      # Create result structure matching original study
+      result <- list(
+        model = plpModel,
+        prediction = prediction,
+        evaluation = evaluation
+      )
+
+      # Add original study's additional analyses
+      private$.loadHelperFunctions()
+
+      # Get score summaries for threshold analysis
+      result$scoreThreshold <- getScoreSummaries(prediction)
+
+      # Get survival information
+      result$survInfo <- getSurvivalInfo(plpData, prediction)
+
+      # Get AUC by year analysis
+      result$yauc <- getAUCbyYear(result)
 
       # Save results
       private$.saveValidationResults(result, jobContext, settings)
