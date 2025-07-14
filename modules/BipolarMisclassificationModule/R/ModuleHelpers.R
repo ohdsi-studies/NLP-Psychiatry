@@ -94,87 +94,79 @@
   return(covariateSettings)
 }
 
-# Get cohort covariate data (custom covariate function)
-getCohortCovariateData <- function(connectionDetails,
-                                   oracleTempSchema = NULL,
+# Get cohort covariate data (from original BipolarMisclassificationValidation study)
+getCohortCovariateData <- function(connection,
+                                   tempEmulationSchema = NULL,
                                    cdmDatabaseSchema,
-                                   cohortTable = "#cohort_person",
-                                   cohortId = -1,
                                    cdmVersion = "5",
-                                   rowIdField = "subject_id",
+                                   cohortTable = "#cohort_person",
+                                   rowIdField = "row_id",
+                                   aggregated,
+                                   targetId,
                                    covariateSettings,
-                                   aggregated = FALSE) {
+                                   ...) {
 
-  # Extract settings
-  covariateName <- covariateSettings$covariateName
-  covariateId <- covariateSettings$covariateId
-  cohortDatabaseSchema <- covariateSettings$cohortDatabaseSchema
-  targetCohortTable <- covariateSettings$cohortTable
-  targetId <- covariateSettings$targetId
-  startDay <- covariateSettings$startDay
-  endDay <- covariateSettings$endDay
-  count <- covariateSettings$count
-  analysisId <- covariateSettings$analysisId
-
-  # Create SQL to get covariate data
-  sql <- "SELECT DISTINCT
-            c1.@row_id_field AS row_id,
-            @covariate_id AS covariate_id,
-            {@count} ? {1} : {DATEDIFF(DAY, c2.cohort_start_date, c1.cohort_start_date)} AS covariate_value
-          FROM @cohort_table c1
-          INNER JOIN @cohort_database_schema.@target_cohort_table c2
-            ON c1.subject_id = c2.subject_id
-          WHERE c1.cohort_definition_id = @cohort_id
-            AND c2.cohort_definition_id = @target_id
-            AND c2.cohort_start_date >= DATEADD(DAY, @start_day, c1.cohort_start_date)
-            AND c2.cohort_start_date <= DATEADD(DAY, @end_day, c1.cohort_start_date)"
+  # Some SQL to construct the covariate (from original study):
+  sql <- paste(
+    "select a.@row_id_field AS row_id, @covariate_id AS covariate_id,
+    {@countval}?{count(distinct b.cohort_start_date)}:{max(1)} as covariate_value",
+    "from @cohort_temp_table a inner join @covariate_cohort_schema.@covariate_cohort_table b",
+    " on a.subject_id = b.subject_id and ",
+    " b.cohort_start_date >= dateadd(day, @startDay, a.cohort_start_date) and ",
+    " b.cohort_start_date <= dateadd(day, @endDay, a.cohort_start_date) ",
+    "where b.cohort_definition_id = @covariate_cohort_id
+    group by a.@row_id_field "
+  )
 
   sql <- SqlRender::render(sql,
                           row_id_field = rowIdField,
-                          covariate_id = covariateId,
-                          count = count,
-                          cohort_table = cohortTable,
-                          cohort_database_schema = cohortDatabaseSchema,
-                          target_cohort_table = targetCohortTable,
-                          cohort_id = cohortId,
-                          target_id = targetId,
-                          start_day = startDay,
-                          end_day = endDay)
+                          covariate_id = covariateSettings$covariateId,
+                          countval = covariateSettings$count,
+                          cohort_temp_table = cohortTable,
+                          covariate_cohort_schema = covariateSettings$cohortDatabaseSchema,
+                          covariate_cohort_table = covariateSettings$cohortTable,
+                          covariate_cohort_id = covariateSettings$targetId,
+                          startDay = covariateSettings$startDay,
+                          endDay = covariateSettings$endDay)
 
-  sql <- SqlRender::translate(sql, targetDialect = connectionDetails$dbms,
-                             oracleTempSchema = oracleTempSchema)
+  sql <- SqlRender::translate(sql, targetDialect = attr(connection, "dbms"), tempEmulationSchema = tempEmulationSchema)
 
-  # Execute query
-  connection <- DatabaseConnector::connect(connectionDetails)
-  covariateData <- DatabaseConnector::querySql(connection, sql, snakeCaseToCamelCase = TRUE)
-  DatabaseConnector::disconnect(connection)
+  # Retrieve the covariate:
+  covariates <- DatabaseConnector::querySql(connection, sql)
 
-  # Create covariate reference
-  covariateRef <- data.frame(
-    covariateId = covariateId,
-    covariateName = covariateName,
-    analysisId = analysisId,
-    conceptId = 0
-  )
+  # Convert column names to camelCase:
+  colnames(covariates) <- SqlRender::snakeCaseToCamelCase(colnames(covariates))
 
-  # Create analysis reference
-  analysisRef <- data.frame(
-    analysisId = analysisId,
-    analysisName = "Custom cohort covariate",
-    domainId = "Cohort",
-    startDay = startDay,
-    endDay = endDay,
-    isBinary = ifelse(count, "Y", "N"),
-    missingMeansZero = "Y"
-  )
+  # Construct covariate reference:
+  sql <- "select @covariate_id as covariate_id, '@concept_set' as covariate_name,
+  456 as analysis_id, -1 as concept_id"
 
-  # Return in FeatureExtraction format
-  result <- list(
-    covariates = covariateData,
-    covariateRef = covariateRef,
-    analysisRef = analysisRef
-  )
+  sql <- SqlRender::render(sql,
+                          covariate_id = covariateSettings$covariateId,
+                          concept_set = covariateSettings$covariateName)
 
+  sql <- SqlRender::translate(sql, targetDialect = attr(connection, "dbms"), tempEmulationSchema = tempEmulationSchema)
+
+  # Retrieve the covariateRef:
+  covariateRef  <- DatabaseConnector::querySql(connection, sql)
+  colnames(covariateRef) <- SqlRender::snakeCaseToCamelCase(colnames(covariateRef))
+
+  analysisRef <- data.frame(analysisId = 456,
+                            analysisName = "cohort covariate",
+                            domainId = "cohort covariate",
+                            startDay = covariateSettings$startDay,
+                            endDay = covariateSettings$endDay,
+                            isBinary = "Y",
+                            missingMeansZero = "Y")
+
+  metaData <- list(sql = sql, call = match.call())
+
+  # Use Andromeda for large data compatibility (updated from original ff)
+  result <- Andromeda::andromeda(covariates = covariates,
+                                 covariateRef = covariateRef,
+                                 analysisRef = analysisRef)
+
+  attr(result, "metaData") <- metaData
   class(result) <- "CovariateData"
   return(result)
 }
