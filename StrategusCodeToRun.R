@@ -128,24 +128,39 @@ executionSettings <- Strategus::createCdmExecutionSettings(
   maxCores = maxCores
 )
 
-# Ensure cohort tables are created before execution
-ParallelLogger::logInfo("Pre-creating cohort tables...")
+# Check if cohort tables exist before creating them
+ParallelLogger::logInfo("Checking cohort tables...")
 tryCatch({
-  # Create all required cohort tables using CohortGenerator
-  cohort_table_names <- CohortGenerator::getCohortTableNames(
-    cohortTable = "cohort"
+  connection <- DatabaseConnector::connect(connectionDetails)
+
+  # Check if main cohort table exists
+  tables_exist <- DatabaseConnector::existsTable(
+    connection = connection,
+    databaseSchema = workDatabaseSchema,
+    tableName = "cohort"
   )
 
-  CohortGenerator::createCohortTables(
-    connectionDetails = connectionDetails,
-    cohortDatabaseSchema = workDatabaseSchema,
-    cohortTableNames = cohort_table_names
-  )
+  DatabaseConnector::disconnect(connection)
 
-  ParallelLogger::logInfo("Cohort tables pre-creation completed")
+  if (!tables_exist) {
+    ParallelLogger::logInfo("Creating cohort tables...")
+    # Create all required cohort tables using CohortGenerator
+    cohort_table_names <- CohortGenerator::getCohortTableNames(
+      cohortTable = "cohort"
+    )
+
+    CohortGenerator::createCohortTables(
+      connectionDetails = connectionDetails,
+      cohortDatabaseSchema = workDatabaseSchema,
+      cohortTableNames = cohort_table_names
+    )
+    ParallelLogger::logInfo("Cohort tables created")
+  } else {
+    ParallelLogger::logInfo("Cohort tables already exist - preserving existing data")
+  }
 
 }, error = function(e) {
-  ParallelLogger::logWarn(paste("Could not pre-create cohort tables:",
+  ParallelLogger::logWarn(paste("Could not check/create cohort tables:",
                                 e$message))
   ParallelLogger::logWarn("Proceeding - CohortGenerator will create tables as needed")
 })
