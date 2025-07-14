@@ -246,10 +246,11 @@ getCohortCovariateData <- function(connection,
 }
 
 # Save validation results
-.saveValidationResults <- function(result, jobContext, settings) {
-  
-  # Create results directory
-  resultsDir <- file.path(jobContext$moduleExecutionSettings$resultsSubFolder, "BipolarMisclassificationModule")
+.saveValidationResults <- function(result, executionSettings, settings) {
+  ParallelLogger::logInfo("Saving validation results")
+
+  # Create results directory using correct Strategus path
+  resultsDir <- file.path(executionSettings$resultsFolder, "BipolarMisclassificationModule")
   if (!dir.exists(resultsDir)) {
     dir.create(resultsDir, recursive = TRUE)
   }

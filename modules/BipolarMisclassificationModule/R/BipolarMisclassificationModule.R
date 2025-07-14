@@ -78,22 +78,20 @@ BipolarMisclassificationModule <- R6::R6Class(
       # Set up logging
       ParallelLogger::logInfo("Starting BipolarMisclassificationModule execution")
 
-      # Convert Strategus parameters to our internal format
-      # Create a jobContext-like object for compatibility with existing code
-      jobContext <- list(
-        moduleExecutionSettings = executionSettings
-      )
-
-      # Extract settings - try multiple approaches for robustness
+      # Extract settings following Strategus conventions
       settings <- NULL
-      if (is.list(analysisSpecifications)) {
-        # Try to find our module's settings
-        for (i in seq_along(analysisSpecifications)) {
-          if (is.list(analysisSpecifications[[i]]) &&
-              !is.null(analysisSpecifications[[i]]$module) &&
-              analysisSpecifications[[i]]$module == "BipolarMisclassificationModule") {
-            settings <- analysisSpecifications[[i]]$settings
-            break
+
+      # Strategus passes analysisSpecifications as the module settings directly
+      if (is.list(analysisSpecifications) && !is.null(analysisSpecifications$settings)) {
+        settings <- analysisSpecifications$settings
+      } else if (is.list(analysisSpecifications)) {
+        # Fallback: try to find our module's settings in moduleSpecifications
+        if (!is.null(analysisSpecifications$moduleSpecifications)) {
+          for (moduleSpec in analysisSpecifications$moduleSpecifications) {
+            if (!is.null(moduleSpec$module) && moduleSpec$module == "BipolarMisclassificationModule") {
+              settings <- moduleSpec$settings
+              break
+            }
           }
         }
       }
@@ -121,14 +119,17 @@ BipolarMisclassificationModule <- R6::R6Class(
         if (settings$generateStats) {
           private$.validateCohorts(jobContext, settings, connectionDetails)
         }
-        
+
         # Run validation if requested
         if (settings$runValidation) {
           private$.runValidation(jobContext, settings, connectionDetails)
         }
-        
+
         # Package results
         private$.packageResults(jobContext, settings)
+
+        # Return success for Strategus
+        return(TRUE)
         
         ParallelLogger::logInfo("BipolarMisclassificationModule execution completed successfully")
         
@@ -316,13 +317,13 @@ BipolarMisclassificationModule <- R6::R6Class(
       result$yauc <- getAUCbyYear(result)
 
       # Save results
-      private$.saveValidationResults(result, jobContext, settings)
+      private$.saveValidationResults(result, executionSettings, settings)
 
       ParallelLogger::logInfo("Validation analysis completed")
     },
 
     # Package results for sharing
-    .packageResults = function(jobContext, settings) {
+    .packageResults = function(executionSettings, settings) {
       ParallelLogger::logInfo("Packaging results for BipolarMisclassificationModule")
 
       # Apply minimum cell count restrictions and package results
